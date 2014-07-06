@@ -3,12 +3,6 @@
 
 class Brutus {
 
-  // Initiate the class with the passed parameter
-  public function __construct($password) {
-    $this->password = $password;
-    $this->charactersInPassword = strlen($password);
-  }
-
   /**
    * @var integer $AttemptsPerSecond The number of attempts per second you 
    * expect an attacker to be able to attempt. Set to 1 billion by default.
@@ -50,23 +44,18 @@ class Brutus {
   );
 
   /**
-   * @var string $AssumedCharacterSet using the SimulateBrute() method will set this
-   * to a useful value which can be used by other methods later when calculating
-   * the entropy of a password using the equation H = log2(R)^N
-   */
-  public $AssumedCharacterSet = '';
-
-  /**
    * Tests a given password against the NIST guidelines to generate a "bit" value
    *
+   * @param string $password The password to generate a bit value for
    * @param bool $diminishedReturns Apply diminishing returns for repeated chars
    * @return integer Returns an integer representing the results of applying the
    * NIST guidelines on the password.
    */
-  public function getNISTbits($diminishedReturns=false) {
+  public function getNISTbits($password, $diminishedReturns = false) {
 
     $bits = $cnt = 0;
-    $char_map = str_split($this->password);
+    $length = strlen($password);
+    $char_map = str_split($password);
     $char_arr = array_fill(0, 256, 1);
 
     // Return the original NIST algorithm
@@ -90,8 +79,8 @@ class Brutus {
 
     // Diminished returns for repeating chars
     else {
-      for($cnt = 0; $cnt < $this->charactersInPassword; $cnt++) {
-        $tmp = ord(substr($this->password, $cnt, 1));
+      for($cnt = 0; $cnt < $length; $cnt++) {
+        $tmp = ord(substr($password, $cnt, 1));
         if($cnt == 1) {
           $bits += 4;
         }
@@ -112,10 +101,10 @@ class Brutus {
     // 6 bits can be granted if the password contains
     // a combination of mixed case, numbers, and symbols.
     // We assign each of these a value of 1.5 bits here.
-    if (preg_match('/[A-Z]/', $this->password)) $bits += 1.5;
-    if (preg_match('/[a-z]/', $this->password)) $bits += 1.5;
-    if (preg_match('/[0-9]/', $this->password)) $bits += 1.5;
-    if (preg_match('/[^A-Za-z0-9]/', $this->password)) $bits += 1.5;
+    if (preg_match('/[A-Z]/', $password)) $bits += 1.5;
+    if (preg_match('/[a-z]/', $password)) $bits += 1.5;
+    if (preg_match('/[0-9]/', $password)) $bits += 1.5;
+    if (preg_match('/[\W_]/', $password)) $bits += 1.5;
 
     return $bits;
   }
@@ -128,9 +117,10 @@ class Brutus {
    * strengthening qualities a password has, as this means a dictionary 
    * attack would take zero time to crack the password.
    *
+   * @param string $password The string to check the dictionary for
    * @return bool True if found in dictionary
    */
-  public function FoundInDictionary() {
+  public function FoundInDictionary($password) {
     if ($this->DictionaryFile) {
       if (!file_exists($this->DictionaryFile)) {
         throw new Exception('Common passwords file was not found');
@@ -139,7 +129,12 @@ class Brutus {
         throw new Exception('Common passwords file was not readable (check permissions)');
       }
       $file = file($this->DictionaryFile);
-      $text = strtolower($this->password);
+      $text = strtolower($password);
+      $leet = array(
+        '@' => array('a','o','0'), '!' => array('1','i','l'), '1' => array('l','i'),
+        '$' => array('s','5'), '6' => array('b','d','g'), '9' => 'g', '8' => 'b', 
+        '7' => 't', '5' => 's', '4' => 'a', '3' => 'e', '2' => 'z', '0' => 'o',
+      );
       foreach($file as $line) {
         $line = trim($line);
         if($line == $text) {
@@ -176,12 +171,13 @@ class Brutus {
    * force a password, obviously more if you're a bank or other secure system.
    * @throws Exception If an error is encountered.
    */
-  public function SimulateBrute() {
+  public function SimulateBrute($password) {
     $base = ''; $baseKey = NULL;
+    $length = strlen($password);
     // Figure out which character set the password is using 
     // (based on the most "complex" character in it).
-    for ($t=0; $t<$this->charactersInPassword; $t++) {
-      $char = $this->password[$t];
+    for ($t = 0; $t < $length; $t++) {
+      $char = $password[$t];
       $foundChar = false;
       foreach ($this->CharacterSets as $characterSetKey=>$characterSet) {
         if ($baseKey<=$characterSetKey && strpos($characterSet,$char)!==false) {
@@ -198,8 +194,6 @@ class Brutus {
         break;
       }
     }
-
-    $this->AssumedCharacterSet = $base;
     
     unset($baseKey);
     unset($foundChar);
@@ -219,7 +213,7 @@ class Brutus {
     // password than 'zzz', because the attacker would encounter 'aaa' first. 
     $attempts = 0;
     $charactersInBase = strlen($base);
-    for ($position=0; $position<$this->charactersInPassword; $position++) {
+    for ($position = 0; $position < $length; $position++) {
       // We power up to the reverse position in the string. For example, if we're trying 
       // to hack the 4 character PING code in the example above:
       // First number * (number of characters possible in the charset ^ length of password)
@@ -231,10 +225,10 @@ class Brutus {
       // and add on the last number
       // 9
       // Totals: 6000 + 500 + 20 + 9 = 6529 attempts before we encounter the correct password.
-      $powerOf = $this->charactersInPassword - $position - 1;
+      $powerOf = $length - $position - 1;
       // Character position within the base set. We add one on because strpos is base 
       // 0, we want base 1.
-      $charAtPosition = strpos($base,$this->password[$position])+1;
+      $charAtPosition = strpos($base,$password[$position])+1;
       // If we're at the last character, simply add it's position in the character set
       // this would be the "9" in the pin code example above.
       if ($powerOf==0) {
@@ -280,20 +274,22 @@ class Brutus {
   /**
    * Calculates the information entropy of a password based on the equation H=log2(R)^N
    *
+   * @param string $password The password we want to calculate entropy for
    * @param bool $average Whether to "average" the entropy based on high/low variants
    * @return integer Returns the entropy of the password. If $average is true, returns
    * the average of the two sums. Otherwise, returns the minimum value entropy.
    */
-  public function GetEntropy($average=true) {
+  public function GetEntropy($password, $average = true) {
+    $length = strlen($password);
     // This method assumes we're an attacker who doesn't know the exact
     // characters used in the password, but rather a probable charset.
     // (results in a higher entropy score)
-    $max_entropy = log(bcpow(strlen($this->AssumedCharacterSet), $this->charactersInPassword), 2);
+    $max_entropy = log(bcpow(strlen($this->AssumedCharacterSet), $length), 2);
 
     // This method actually divies up the password into its unique characters and
     // counts the total number of unique characters versus a probable charset.
     // (results in a lower entropy score)
-    $min_entropy = log(bcpow(strlen(count_chars($this->password, 3)), $this->charactersInPassword), 2);
+    $min_entropy = log(bcpow(strlen(count_chars($password, 3)), $length), 2);
 
     if($average) {
       return ($min_entropy + $max_entropy) / 2;
