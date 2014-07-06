@@ -1,8 +1,43 @@
 <?php
 
+/**
+* Brutus - Comprehensive password testing made easy
+*
+* A simple, yet comprehensive password grading and validation class which 
+* utilizes tried and tested methods for quantifying a password's strength 
+* as well as enforcing a security policy condusive to strong passwords.
+*
+* Includes a dictionary of the 10k most common passwords from Mike Burnett 
+* (https://xato.net/passwords/more-top-worst-passwords) as well as an extensive
+* alphabetical dictionary of common terms. Checking passwords against a library
+* like this helps to prevent users from choosing passwords that wouldn't stand
+* up to even the simplest dictionary attacks. We also convert leet speak into 
+* its corresponding alpha characters thus reducing the keyspace required to find 
+* the correct solution. This highlights the weakness of using leetspeak in passwords, 
+* as substitutions are no match for a relatively even spread of random characters.
+*
+* @author Josh Jones
+* @version 1.0
+* @license GPL3
+*
+* Usage:
+*   $brutus = new Brutus();
+*   $NISTbits = $brutus->getNISTbits($password, true);
+*   $getEntropy = $brutus->GetEntropy($password, true);
+*   ...etc
+*/
 
 class Brutus {
 
+  public function __construct($min=10, $max=50) {
+    if($min < 10) {
+      $this->minLength = 10;
+    }
+    else {
+      $this->minLength = $min;
+    }
+    $this->maxLength = $max;
+  }
   /**
    * @var integer $AttemptsPerSecond The number of attempts per second you 
    * expect an attacker to be able to attempt. Set to 1 billion by default.
