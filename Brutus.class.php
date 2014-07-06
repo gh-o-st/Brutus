@@ -281,10 +281,32 @@ class Brutus {
    */
   public function GetEntropy($password, $average = true) {
     $length = strlen($password);
+    $base = ''; $baseKey = NULL;
+    for ($t = 0; $t < $length; $t++) {
+      $char = $password[$t];
+      $foundChar = false;
+      foreach ($this->CharacterSets as $characterSetKey=>$characterSet) {
+        if ($baseKey<=$characterSetKey && strpos($characterSet,$char)!==false) {
+          $baseKey = $characterSetKey;
+          $base = $characterSet;
+          $foundChar = true;
+          break;
+        }
+      }
+      // If the character we were looking for wasn't anywhere in any of the 
+      // character sets, assign the largest (last) character set as default.
+      if (!$foundChar) {
+        $base = end($this->CharacterSets);
+        break;
+      }
+    }
+    unset($baseKey);
+    unset($foundChar);
+
     // This method assumes we're an attacker who doesn't know the exact
     // characters used in the password, but rather a probable charset.
     // (results in a higher entropy score)
-    $max_entropy = log(bcpow(strlen($this->AssumedCharacterSet), $length), 2);
+    $max_entropy = log(bcpow(strlen($base), $length), 2);
 
     // This method actually divies up the password into its unique characters and
     // counts the total number of unique characters versus a probable charset.
