@@ -11,89 +11,214 @@
 * (https://xato.net/passwords/more-top-worst-passwords) as well as an extensive
 * alphabetical dictionary of common terms. Checking passwords against a library
 * like this helps to prevent users from choosing passwords that wouldn't stand
-* up to even the simplest dictionary attacks. We also convert leet speak into 
-* its corresponding alpha characters thus reducing the keyspace required to find 
-* the correct solution. This highlights the weakness of using leetspeak in passwords, 
-* as substitutions are no match for a relatively even spread of random characters.
+* up to even the simplest dictionary attacks. We also check the password for
+* "leetspeak" substitutions. While on the surface they may seem to make the
+* password stronger, their predictability actually makes it so that they do  
+* little more for your password than using plain text characters.
+*
+* By combining the methods above with methods to measure the shannon entropy
+* of the password as well as simulating a brute force attack, we can more
+* accurately measure/grade the "strength" of a given password. This can help
+* you to implement a more secure password policy by disallowing weak passwords
+* that wouldn't stand up to brute force attacks.
+*
 *
 * @author Josh Jones
 * @version 1.0
 * @license GPL3
 *
-* Usage:
+*
+*
+* Example Usage: 
+* * * * * * * * * 
 *   $brutus = new Brutus();
-*   $NISTbits = $brutus->getNISTbits($password, true);
-*   $getEntropy = $brutus->GetEntropy($password, true);
-*   ...etc
+*
+*   if($brutus->badPass($password)) {
+*     foreach($brutus->showErrors() as $error) {
+*       echo $error.'<br>';
+*     }
+*   }
+*   
 */
 
 class Brutus {
 
-  public function __construct($min=10, $max=50) {
-    if($min < 10) {
-      $this->minLength = 10;
-    }
-    else {
-      $this->minLength = $min;
-    }
-    $this->maxLength = $max;
-  }
-  /**
-   * @var integer $AttemptsPerSecond The number of attempts per second you 
-   * expect an attacker to be able to attempt. Set to 1 billion by default.
-   */
-  public $AttemptsPerSecond = 1000000000;
-
-  /**
-   * @var string $DictionaryFile The path to a text file containing common
-   * passwords (one per line, all lower case) and dictionary terms to check 
-   * against. By default set to point to the file included with this class.
-   * Set this to null to skip checking common passwords and dictionary terms.
-   */
-  public $DictionaryFile = 'dictionary.txt';
-
-  /**
-   * @var array $CharacterSets An array of strings, each string containing a
-   * character set. These should proceed in the order of simplest (0-9) to most
-   * complex (all characters). More complex = more characters.
-   */
-  public $CharacterSets = array(
-    // We're making some guesses here about human nature (again much of this is 
-    // based on the TGP password strength checker, and Timothy "Thor" Mullen 
-    // deserves the credit for the thinking behind this). Basically we're combining 
-    // what we know about users (SHIFT+numbers are more common than other 
-    // punctuation for example) combined with how an attacker will attack a 
-    // password (most common letters first, expanding outwards).
-    //
-    // If you want to support passwords that use non-english characters, and
-    // your attacker knows this (for example, a Russian site would be expected
-    // to contain passwords in Russian characters) add your characters to one of
-    // the sets below, or create new sets and insert them in the right places.
-    "0123456789",
-    "abcdefghijklmnopqrstuvwxyz",
-    "abcdefghijklmnopqrstuvwxyz0123456789",
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+",
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+[]\"{}|;':,./<>?`~",
+  private $password  = null;
+  private $threshold = null;
+  private $boundary  = null;
+  private $lookup    = null;
+  private $commons   = 'dictionary.txt';
+  private $passlist  = array();
+  private $rules     = array();
+  private $errors    = array();
+  private $i18n      = array(
+    'threshold' => 'Password cannot be less than %s characters',
+    'boundary'  => 'Password cannot be greater than %s characters',
+    'lower'     => 'Password must contain at least %s lowercase leter%s',
+    'upper'     => 'Password must contain at least %s uppercase letter%s',
+    'numeric'   => 'Password must contain at least %s number%s',
+    'special'   => 'Password must contain at least %s special character%s',
+    'identity'  => 'Password contains one or more personally identifiable tokens',
+    'common'    => 'Password was found in the list of most common passwords',
+    'entropy'   => 'We require that your password has at least %s bits of entropy. The password you\'ve chosen currently has %s',
+    'brute'     => 'Your password must be able survive at least %s days of brute force attempts. Currently, yours would only last %s'
   );
+  private $charSets = array(
+    "0123456789", // numeric only
+    "abcdefghijklmnopqrstuvwxyz", // lower alpha
+    "abcdefghijklmnopqrstuvwxyz ", // lower alpha + space
+    "abcdefghijklmnopqrstuvwxyz0123456789", // lower alphanumeric
+    "abcdefghijklmnopqrstuvwxyz0123456789 ", // lower alphanumeric + space
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", // mixed alpha
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ", // mixed alpha + space
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", // mixed alphanumeric
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ", // mixed alphanumeric + space
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+ ", // mixed alphanumeric + primary symbols
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+[]\"{}|;':,./<>?`~", // mixed alphanumeric + all symbols
+  );
+  private $AttemptsPerSecond = 1000000000;
 
-  /**
-   * Tests a given password against the NIST guidelines to generate a "bit" value
-   *
-   * @param string $password The password to generate a bit value for
-   * @param bool $diminishedReturns Apply diminishing returns for repeated chars
-   * @return integer Returns an integer representing the results of applying the
-   * NIST guidelines on the password.
-   */
-  public function getNISTbits($password, $diminishedReturns = false) {
+  public function __construct($args=array('min'=>10,'max'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1,'identity'=>array(),'entropy'=>30,'brute'=>60)) {
+    $this->threshold = $args['min'];
+    $this->boundary  = $args['max'];
+    $this->lookup    = $args['lookup'];
+    $this->rules['lower'] = $args['lower'];
+    $this->rules['upper'] = $args['upper'];
+    $this->rules['numeric'] = $args['numeric'];
+    $this->rules['special'] = $args['special'];
+    $this->rules['identity'] = $args['identity'];
+    $this->rules['entropy'] = $args['entropy'];
+    $this->rules['brute'] = $args['brute'];
+  }
+
+  public function badPass($password) {
+    $this->password = $password;
+    $this->checkLength();
+    $this->checkComp();
+    $this->check1337();
+    $this->checkDict();
+    $this->userDetails();
+    $this->getNISTbits();
+    $this->simBrute();
+    if (count($this->errors) > 0) {
+      return $this->showErrors();
+    }
+    return false;
+  }
+
+  public function showErrors() {
+    return $this->errors;
+  }
+
+  public function checkLength() {
+    if (strlen($this->password) < $this->threshold) {
+      $this->errors[] = sprintf($this->i18n['threshold'], $this->threshold);
+    }
+    else if (strlen($this->password) > $this->boundary) {
+      $this->errors[] = sprintf($this->i18n['boundary'], $this->boundary);
+    }
+  }
+
+  public function checkComp() {
+    if (isset($this->rules['lower'])) {
+      if (preg_match_all('/[a-z]+/', $this->password, $lower) < $this->rules['lower']) {
+        $this->errors[] = sprintf($this->i18n['lower'], $this->rules['lower'], ($this->rules['lower'] > 1) ? 's' : '');
+      }
+      if (preg_match_all('/[A-Z]+/', $this->password, $upper) < $this->rules['upper']) {
+        $this->errors[] = sprintf($this->i18n['upper'], $this->rules['upper'], ($this->rules['upper'] > 1) ? 's' : '');
+      }
+      if (preg_match_all('/[0-9]+/', $this->password, $numbers) < $this->rules['numeric']) {
+        $this->errors[] = sprintf($this->i18n['numeric'], $this->rules['numeric'], ($this->rules['numeric'] > 1) ? 's' : '');
+      }
+      if (preg_match_all('/[\W_]+/', $this->password, $special) < $this->rules['special']) {
+        $this->errors[] = sprintf($this->i18n['special'], $this->rules['special'], ($this->rules['special'] > 1) ? 's' : '');
+      }
+    }
+  }
+
+  public function check1337() {
+    // don't put too much stuff here, it has exponential performance impact.
+    $leet = array(
+      '@' => array('a','o'), '!' => array('1','i','l'), '1' => array('l','i'),
+      '$' => array('s','5'), '6' => array('b','d'), '9' => 'g', '8' => 'b', 
+      '7' => 't', '5' => 's', '4' => 'a', '3' => 'e', '0' => 'o',
+    );
+    $map = array();
+    $pass_array = str_split(strtolower($this->password));
+    foreach($pass_array as $i => $char) {
+      $map[$i][] = $char;
+      foreach ($leet as $pattern => $replace) {
+        if ($char === (string)$pattern) {
+          for($j=0,$c=count($replace); $j<$c; $j++) {
+            $map[$i][] = $replace[$j];
+          }
+        }
+      }
+    }
+    $this->passlist = $this->populateList($map);
+  }
+
+  public function populateList(&$map, $old = array(), $index = 0) {
+    $new = array();
+    foreach ($map[$index] as $char) {
+      $c = count($old);
+      if ($c == 0) {
+        $new[] = $char;
+      }
+      else {
+        for ($i=0,$c=count($old); $i<$c; $i++) {
+          $new[] = @$old[$i].$char;
+        }
+      }
+    }
+    unset($old);
+    $r = ($index == count($map)-1) ? $new : $this->populateList($map, $new, $index + 1);
+    return $r;
+  }
+
+  public function checkDict() {
+    if ($this->lookup) {
+      if (!file_exists($this->commons)) {
+        throw new Exception('Common passwords file was not found');
+      }
+      if (!is_readable($this->commons)) {
+        throw new Exception('Common passwords file was not readable (check permissions)');
+      }
+      $passfile = fopen($this->commons, 'r');
+      while (($buffer = fgets($passfile, 1024)) !== false) {
+        $buffer = rtrim($buffer);
+        foreach ($this->passlist as $password) {
+          if ($password == $buffer) {
+            $this->errors[] = $this->i18n['common'];
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  public function userDetails() {
+    if (isset($this->rules['identity'])) {
+      foreach ($this->rules['identity'] as $token) {
+        foreach ($this->passlist as $password) {
+          if (preg_match("/$token/i", $password)) {
+            $this->errors[] = $this->i18n['identity'];
+            return;
+          }
+        }
+      }
+    }
+  }
+
+  public function getNISTbits($diminishedReturns = false) {
 
     $bits = $cnt = 0;
-    $length = strlen($password);
-    $char_map = str_split($password);
+    $length = strlen($this->password);
+    $char_map = str_split($this->password);
     $char_arr = array_fill(0, 256, 1);
 
-    // Return the original NIST algorithm
+    // Run the original NIST algorithm which
+    // has no penalty for repeated characters
     if (!$diminishedReturns) {
       foreach ($char_map as $char) {
         $cnt++;
@@ -112,11 +237,13 @@ class Brutus {
       }
     }
 
-    // Diminished returns for repeating chars
+    // Run the modified NIST algorithm which
+    // penalizes you for repeated characters
+    // (diminishing returns)
     else {
-      for($cnt = 0; $cnt < $length; $cnt++) {
+      for ($cnt = 0; $cnt < $length; $cnt++) {
         $tmp = ord(substr($password, $cnt, 1));
-        if($cnt == 1) {
+        if ($cnt == 1) {
           $bits += 4;
         }
         elseif ($cnt > 1 && $cnt <= 8) {
@@ -136,85 +263,23 @@ class Brutus {
     // 6 bits can be granted if the password contains
     // a combination of mixed case, numbers, and symbols.
     // We assign each of these a value of 1.5 bits here.
-    if (preg_match('/[A-Z]/', $password)) $bits += 1.5;
-    if (preg_match('/[a-z]/', $password)) $bits += 1.5;
-    if (preg_match('/[0-9]/', $password)) $bits += 1.5;
-    if (preg_match('/[\W_]/', $password)) $bits += 1.5;
+    if (preg_match('/[A-Z]/', $this->password)) $bits += 1.5;
+    if (preg_match('/[a-z]/', $this->password)) $bits += 1.5;
+    if (preg_match('/[0-9]/', $this->password)) $bits += 1.5;
+    if (preg_match('/[\W_]/', $this->password)) $bits += 1.5;
 
-    return $bits;
-  }
-
-  /**
-   * Tests a password against a dictionary of common passwords and an 
-   * alphabetical list of dictionary terms.
-   *
-   * Finding the password in the list would effectively moot any 
-   * strengthening qualities a password has, as this means a dictionary 
-   * attack would take zero time to crack the password.
-   *
-   * @param string $password The string to check the dictionary for
-   * @return bool True if found in dictionary
-   */
-  public function FoundInDictionary($password) {
-    if ($this->DictionaryFile) {
-      if (!file_exists($this->DictionaryFile)) {
-        throw new Exception('Common passwords file was not found');
-      }
-      if (!is_readable($this->DictionaryFile)) {
-        throw new Exception('Common passwords file was not readable (check permissions)');
-      }
-      $file = file($this->DictionaryFile);
-      $text = strtolower($password);
-      $leet = array(
-        '@' => array('a','o','0'), '!' => array('1','i','l'), '1' => array('l','i'),
-        '$' => array('s','5'), '6' => array('b','d','g'), '9' => 'g', '8' => 'b', 
-        '7' => 't', '5' => 's', '4' => 'a', '3' => 'e', '2' => 'z', '0' => 'o',
-      );
-      foreach($file as $line) {
-        $line = trim($line);
-        if($line == $text) {
-          return true;
-        }
-      }
-      unset($file);
-      unset($text);
+    if ($bits < $this->rules['entropy']) {
+      $this->errors[] = sprintf($this->i18n['entropy'], $this->rules['entropy'], $bits);
     }
-    return false;
   }
 
-  /**
-   * Tests password strength by simulating how long it would take a cracker to
-   * brute force your password. 
-   *
-   * Also optionally tests against a list of common passwords (contained in an 
-   * external file) to weed out things like "password", which from a pure brute
-   * force perspective would be harder to break if it wasn't so common.
-   *
-   * The character sets being used in this checker assume English (ASCII) 
-   * characters (no umlauts for example). If you run a non-english site, and you 
-   * suspect the crackers will realize this, you may want to modify the 
-   * character set to include the characters in your language.
-   *
-   * @param string $password The password to test the strength of
-   * @return integer Returns an integer specifying how many days it would take 
-   * to brute force the password (at 1 billion checks a second) or -1 to 
-   * indicate the password was found in the common passwords file. Obviously if 
-   * they don't have direct access to the hashed passwords this time would be 
-   * longer, and even then most computers (at the time of this writing) won't be 
-   * able to test 1 billion hashes a second, but this function measures worst 
-   * case scenario, so... I would recommend you require at least 30 days to brute 
-   * force a password, obviously more if you're a bank or other secure system.
-   * @throws Exception If an error is encountered.
-   */
-  public function SimulateBrute($password) {
+  public function simBrute() {
     $base = ''; $baseKey = NULL;
-    $length = strlen($password);
-    // Figure out which character set the password is using 
-    // (based on the most "complex" character in it).
+    $length = strlen($this->password);
     for ($t = 0; $t < $length; $t++) {
-      $char = $password[$t];
+      $char = $this->password[$t];
       $foundChar = false;
-      foreach ($this->CharacterSets as $characterSetKey=>$characterSet) {
+      foreach ($this->charSets as $characterSetKey=>$characterSet) {
         if ($baseKey<=$characterSetKey && strpos($characterSet,$char)!==false) {
           $baseKey = $characterSetKey;
           $base = $characterSet;
@@ -263,7 +328,7 @@ class Brutus {
       $powerOf = $length - $position - 1;
       // Character position within the base set. We add one on because strpos is base 
       // 0, we want base 1.
-      $charAtPosition = strpos($base,$password[$position])+1;
+      $charAtPosition = strpos($base,$this->password[$position])+1;
       // If we're at the last character, simply add it's position in the character set
       // this would be the "9" in the pin code example above.
       if ($powerOf==0) {
@@ -303,54 +368,9 @@ class Brutus {
     if (bccomp($days,1000000000)==1) {
       $days = 1000000000;
     }
-    return $days;
-  }
-
-  /**
-   * Calculates the information entropy of a password based on the equation H=log2(R)^N
-   *
-   * @param string $password The password we want to calculate entropy for
-   * @param bool $average Whether to "average" the entropy based on high/low variants
-   * @return integer Returns the entropy of the password. If $average is true, returns
-   * the average of the two sums. Otherwise, returns the minimum value entropy.
-   */
-  public function GetEntropy($password, $average = true) {
-    $length = strlen($password);
-    $base = ''; $baseKey = NULL;
-    for ($t = 0; $t < $length; $t++) {
-      $char = $password[$t];
-      $foundChar = false;
-      foreach ($this->CharacterSets as $characterSetKey=>$characterSet) {
-        if ($baseKey<=$characterSetKey && strpos($characterSet,$char)!==false) {
-          $baseKey = $characterSetKey;
-          $base = $characterSet;
-          $foundChar = true;
-          break;
-        }
-      }
-      // If the character we were looking for wasn't anywhere in any of the 
-      // character sets, assign the largest (last) character set as default.
-      if (!$foundChar) {
-        $base = end($this->CharacterSets);
-        break;
-      }
+    
+    if ($days < $this->rules['brute']) {
+      $this->errors[] = sprintf($this->i18n['brute'], $this->rules['brute'], $days);
     }
-    unset($baseKey);
-    unset($foundChar);
-
-    // This method assumes we're an attacker who doesn't know the exact
-    // characters used in the password, but rather a probable charset.
-    // (results in a higher entropy score)
-    $max_entropy = log(bcpow(strlen($base), $length), 2);
-
-    // This method actually divies up the password into its unique characters and
-    // counts the total number of unique characters versus a probable charset.
-    // (results in a lower entropy score)
-    $min_entropy = log(bcpow(strlen(count_chars($password, 3)), $length), 2);
-
-    if($average) {
-      return ($min_entropy + $max_entropy) / 2;
-    }
-    return $min_entropy;
   }
 }
