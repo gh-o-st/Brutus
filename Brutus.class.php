@@ -43,25 +43,24 @@
 
 class Brutus {
 
-  private $password  = null;
-  private $threshold = null;
-  private $boundary  = null;
-  private $lookup    = null;
-  private $commons   = 'dictionary.txt';
-  private $passlist  = array();
-  private $rules     = array();
-  private $errors    = array();
-  private $i18n      = array(
-    'threshold' => 'Password cannot be less than %s characters',
-    'boundary'  => 'Password cannot be greater than %s characters',
-    'lower'     => 'Password must contain at least %s lowercase leter%s',
-    'upper'     => 'Password must contain at least %s uppercase letter%s',
-    'numeric'   => 'Password must contain at least %s number%s',
-    'special'   => 'Password must contain at least %s special character%s',
-    'identity'  => 'Password contains one or more personally identifiable tokens',
-    'common'    => 'Password was found in the list of most common passwords',
-    'entropy'   => 'We require that your password has at least %s bits of entropy. The password you\'ve chosen currently has %s',
-    'brute'     => 'Your password must be able survive at least %s days of brute force attempts. Currently, yours would only last %s'
+  private $password = null;
+  private $lookup   = null;
+  private $hashpsec = 1000000000;
+  private $commons  = 'dictionary.txt';
+  private $passlist = array();
+  private $rules    = array();
+  private $errors   = array();
+  private $i18n     = array(
+    'minlen'   => 'Password cannot be less than %s characters',
+    'maxlen'   => 'Password cannot be greater than %s characters',
+    'lower'    => 'Password must contain at least %s lowercase leter%s',
+    'upper'    => 'Password must contain at least %s uppercase letter%s',
+    'numeric'  => 'Password must contain at least %s number%s',
+    'special'  => 'Password must contain at least %s special character%s',
+    'identity' => 'Password contains one or more personally identifiable tokens',
+    'common'   => 'Password was found in the list of most common passwords',
+    'entropy'  => 'Password must have at least %s bits of entropy; Currently at %s',
+    'brute'    => 'Password must survive %s days of brute force attempts; Currently at %s'
   );
   private $charSets = array(
     "0123456789", // numeric only
@@ -76,23 +75,33 @@ class Brutus {
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+ ", // mixed alphanumeric + primary symbols
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+[]\"{}|;':,./<>?`~", // mixed alphanumeric + all symbols
   );
-  private $AttemptsPerSecond = 1000000000;
+  
 
-  public function __construct($args=array('min'=>10,'max'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1,'identity'=>array(),'entropy'=>30,'brute'=>60)) {
-    $this->threshold = $args['min'];
-    $this->boundary  = $args['max'];
-    $this->lookup    = $args['lookup'];
-    $this->rules['lower'] = $args['lower'];
-    $this->rules['upper'] = $args['upper'];
-    $this->rules['numeric'] = $args['numeric'];
-    $this->rules['special'] = $args['special'];
-    $this->rules['identity'] = $args['identity'];
-    $this->rules['entropy'] = $args['entropy'];
-    $this->rules['brute'] = $args['brute'];
+  public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1, 'entropy'=>30,'brute'=>60,'i18n'=>array())) {
+    foreach ($args as $arg => $val) {
+      if ($arg == 'i18n') {
+        if (count($arg) > 0) {
+          if (count($arg) == 10) {
+            $this->rules[$arg] = $val;
+          }
+          else {
+            $this->rules[$arg] = $this->i18n;
+            throw new Exception(sprintf('Internationalization array requires 10 entries; %s supplied.', count($arg)));
+          }
+        }
+        else {
+          $this->rules[$arg] = $val;
+        }
+      }
+      else {
+        $this->rules[$arg] = $val;
+      }
+    }
   }
 
-  public function badPass($password) {
+  public function badPass($password, $id) {
     $this->password = $password;
+    $this->rules['identity'] = $id;
     $this->checkLength();
     $this->checkComp();
     $this->check1337();
@@ -101,7 +110,7 @@ class Brutus {
     $this->getNISTbits();
     $this->simBrute();
     if (count($this->errors) > 0) {
-      return $this->showErrors();
+      return true;
     }
     return false;
   }
@@ -111,11 +120,11 @@ class Brutus {
   }
 
   public function checkLength() {
-    if (strlen($this->password) < $this->threshold) {
-      $this->errors[] = sprintf($this->i18n['threshold'], $this->threshold);
+    if (strlen($this->password) < $this->rules['minlen']) {
+      $this->errors[] = sprintf($this->i18n['minlen'], $this->rules['minlen']);
     }
-    else if (strlen($this->password) > $this->boundary) {
-      $this->errors[] = sprintf($this->i18n['boundary'], $this->boundary);
+    else if (strlen($this->password) > $this->rules['maxlen']) {
+      $this->errors[] = sprintf($this->i18n['maxlen'], $this->rules['maxlen']);
     }
   }
 
@@ -139,9 +148,11 @@ class Brutus {
   public function check1337() {
     // don't put too much stuff here, it has exponential performance impact.
     $leet = array(
-      '@' => array('a','o'), '!' => array('1','i','l'), '1' => array('l','i'),
-      '$' => array('s','5'), '6' => array('b','d'), '9' => 'g', '8' => 'b', 
-      '7' => 't', '5' => 's', '4' => 'a', '3' => 'e', '0' => 'o',
+      '@'=>array('a', 'o'), '4'=>array('a'),
+      '8'=>array('b'), '3'=>array('e'),
+      '1'=>array('i', 'l'), '!'=>array('i','l','1'),
+      '0'=>array('o'), '$'=>array('s','5'),
+      '5'=>array('s'), '6'=>array('b', 'd'), '7'=>array('t')
     );
     $map = array();
     $pass_array = str_split(strtolower($this->password));
@@ -176,24 +187,37 @@ class Brutus {
     return $r;
   }
 
+  /**
+   * When checking a password which contains leetspeak, the performance index
+   * plummits... This is because currently, we're parsing the string to permute
+   * all possible combinations of characters in order to verify that no version
+   * of the "leet" password is included in the dictionary file. Unfortunately,
+   * this (based on password length) can very dramatically impact performance.
+   */
   public function checkDict() {
-    if ($this->lookup) {
+    if ($this->rules['lookup']) {
       if (!file_exists($this->commons)) {
         throw new Exception('Common passwords file was not found');
       }
       if (!is_readable($this->commons)) {
         throw new Exception('Common passwords file was not readable (check permissions)');
       }
-      $passfile = fopen($this->commons, 'r');
-      while (($buffer = fgets($passfile, 1024)) !== false) {
-        $buffer = rtrim($buffer);
+      $file = fopen($this->commons,'rb');
+      while (!feof($file)) {
+        $common = fgets($file);
+        $common = trim($common);
         foreach ($this->passlist as $password) {
-          if ($password == $buffer) {
+          $password = strtolower($password);
+          if ($common == $password) {
             $this->errors[] = $this->i18n['common'];
             return;
           }
         }
       }
+      fclose($file);
+      unset($file);
+      unset($text);
+      unset($common);
     }
   }
 
@@ -355,7 +379,7 @@ class Brutus {
     
     // We can (worst case) try one billion passwords per second. Calculate how many days
     // it will take us to get to the password using only brute force attempts.
-    $perDay = bcmul($this->AttemptsPerSecond,60*60*24);
+    $perDay = bcmul($this->hashpsec,60*60*24);
 
     // This allows us to calculate a number of days to crack. We use days because anything
     // that can be cracked in less than a day is basically useless, so there's no point in
