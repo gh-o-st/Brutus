@@ -10,6 +10,14 @@ Usage
 ```php
 $brutus = new Brutus();
 
+/**
+ * The password checking method assumes first
+ * that the password is NOT "bad", therefore
+ * returning false until the errors array is
+ * greater than zero, thus causing the method
+ * to return "true", indicating the password
+ * is, indeed, a "bad" password.
+ */
 if($brutus->badPass($password)) {
   foreach($brutus->showErrors() as $error) {
     echo $error.'<br>';
