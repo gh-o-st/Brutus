@@ -1,5 +1,4 @@
-Brutus
-======
+<img src="https://raw.githubusercontent.com/UberNerdBoy/Brutus/master/assets/brutus.png" alt="Brutus">
 
 A simple, yet comprehensive password grading and validation class which utilizes tried and tested methods for quantifying a password's strength as well as enforcing a security policy that conforms to a definable set of rules.
 
