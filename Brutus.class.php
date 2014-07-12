@@ -77,25 +77,12 @@ class Brutus {
   );
   
 
-  public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1, 'entropy'=>30,'brute'=>60,'i18n'=>array())) {
+  public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1, 'entropy'=>30,'brute'=>60), $i18n=null) {
     foreach ($args as $arg => $val) {
-      if ($arg == 'i18n') {
-        if (count($arg) > 0) {
-          if (count($arg) == 10) {
-            $this->rules[$arg] = $val;
-          }
-          else {
-            $this->rules[$arg] = $this->i18n;
-            throw new Exception(sprintf('Internationalization array requires 10 entries; %s supplied.', count($arg)));
-          }
-        }
-        else {
-          $this->rules[$arg] = $val;
-        }
-      }
-      else {
-        $this->rules[$arg] = $val;
-      }
+      $this->rules[$arg] = $val;
+    }
+    if (isset($i18n) && count($i18n) != 10) {
+      throw new Exception(sprintf('Internationalization array requires 10 entries; %s supplied.', count($arg)));
     }
   }
 
@@ -129,19 +116,17 @@ class Brutus {
   }
 
   public function checkComp() {
-    if (isset($this->rules['lower'])) {
-      if (preg_match_all('/[a-z]+/', $this->password, $lower) < $this->rules['lower']) {
-        $this->errors[] = sprintf($this->i18n['lower'], $this->rules['lower'], ($this->rules['lower'] > 1) ? 's' : '');
-      }
-      if (preg_match_all('/[A-Z]+/', $this->password, $upper) < $this->rules['upper']) {
-        $this->errors[] = sprintf($this->i18n['upper'], $this->rules['upper'], ($this->rules['upper'] > 1) ? 's' : '');
-      }
-      if (preg_match_all('/[0-9]+/', $this->password, $numbers) < $this->rules['numeric']) {
-        $this->errors[] = sprintf($this->i18n['numeric'], $this->rules['numeric'], ($this->rules['numeric'] > 1) ? 's' : '');
-      }
-      if (preg_match_all('/[\W_]+/', $this->password, $special) < $this->rules['special']) {
-        $this->errors[] = sprintf($this->i18n['special'], $this->rules['special'], ($this->rules['special'] > 1) ? 's' : '');
-      }
+    if (preg_match_all('/[a-z]/', $this->password, $lower) < $this->rules['lower']) {
+      $this->errors[] = sprintf($this->i18n['lower'], $this->rules['lower'], ($this->rules['lower'] > 1) ? 's' : '');
+    }
+    if (preg_match_all('/[A-Z]/', $this->password, $upper) < $this->rules['upper']) {
+      $this->errors[] = sprintf($this->i18n['upper'], $this->rules['upper'], ($this->rules['upper'] > 1) ? 's' : '');
+    }
+    if (preg_match_all('/[0-9]/', $this->password, $numbers) < $this->rules['numeric']) {
+      $this->errors[] = sprintf($this->i18n['numeric'], $this->rules['numeric'], ($this->rules['numeric'] > 1) ? 's' : '');
+    }
+    if (preg_match_all('/[\W_]/', $this->password, $special) < $this->rules['special']) {
+      $this->errors[] = sprintf($this->i18n['special'], $this->rules['special'], ($this->rules['special'] > 1) ? 's' : '');
     }
   }
 
