@@ -77,6 +77,13 @@ class Brutus {
   );
   
 
+  /**
+   * @var array $args all rules  necessary to setup and customize your own security policy enforcement protocols
+   * @var array $i18n an array of 10 k => v pairs containing localized error messages to be displayed to viewers on failure(s)
+   *
+   * If the internationalization (i18n) array is not passed the class will revert back to the default English messages.
+   * However, if the parameter IS passed, but is not exactly 10 k => v pairs, a new exception will be thrown.
+   */
   public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1, 'entropy'=>30,'brute'=>60), $i18n=null) {
     foreach ($args as $arg => $val) {
       $this->rules[$arg] = $val;
@@ -188,6 +195,22 @@ class Brutus {
         throw new Exception('Common passwords file was not readable (check permissions)');
       }
       $file = fopen($this->commons,'rb');
+
+      /* foreach() before while()
+      foreach ($this->passlist as $password) {
+        $password = strtolower($password);
+        while (!feof($file)) {
+          $common = fgets($file);
+          $common = trim($common);
+          if ($common == $password) {
+            $this->errors[] = $this->i18n['common'];
+            return;
+          }
+        }
+      }
+      */
+
+      /* while() before foreach() */
       while (!feof($file)) {
         $common = fgets($file);
         $common = trim($common);
@@ -199,6 +222,7 @@ class Brutus {
           }
         }
       }
+      
       fclose($file);
       unset($file);
       unset($text);
