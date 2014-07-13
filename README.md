@@ -2,7 +2,7 @@
 
 A simple, yet comprehensive password grading and validation class which utilizes tried and tested methods for quantifying a password's strength as well as enforcing a security policy that conforms to a definable set of rules.
 
-Includes a dictionary file of the 10k most common passwords (kudos Mike Burnett), as well as an alphabetized list of common dictionary terms which can be used for testing the password's projected strength against dictionary attacks. Also converts leetspeak to its basic english counterparts, thus reducing the keyspace needed to bruteforce a password. However, when using this feature in conjunction with the dictionary lookup method, the performance impact is severe.
+Includes a dictionary file of the 10k most common passwords (kudos Mark Burnett), as well as an alphabetized list of common dictionary terms which can be used for testing the password's projected strength against dictionary attacks. Also converts leetspeak to its basic english counterparts, thus reducing the keyspace needed to bruteforce a password. However, when using this feature in conjunction with the dictionary lookup method, the performance impact is severe.
 
 Usage
 -----
