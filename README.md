@@ -7,7 +7,7 @@ Includes a dictionary file of the 10k most common passwords (kudos Mark Burnett)
 Usage
 -----
 ```php
-$brutus = new Brutus();
+$brutus = new Brutus($args);
 
 /**
  * The password checking method assumes first
@@ -17,7 +17,7 @@ $brutus = new Brutus();
  * to return "true", indicating the password
  * is, indeed, a "bad" password.
  */
-if($brutus->badPass($password)) {
+if($brutus->badPass($password, $id)) {
   foreach($brutus->showErrors() as $error) {
     echo $error.'<br>';
   }

@@ -31,9 +31,9 @@
 *
 * Example Usage:
 * * * * * * * * *
-* $brutus = new Brutus();
+* $brutus = new Brutus($args);
 *
-* if ($brutus->badPass($password)) {
+* if ($brutus->badPass($password, $id)) {
 *   foreach ($brutus->showErrors() as $error) {
 *     echo $error.'<br>';
 *   }
