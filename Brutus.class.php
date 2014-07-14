@@ -3,17 +3,17 @@
 /**
 * Brutus - Comprehensive password testing made easy
 *
-* A simple, yet comprehensive password grading and validation class which 
-* utilizes tried and tested methods for quantifying a password's strength 
+* A simple, yet comprehensive password grading and validation class which
+* utilizes tried and tested methods for quantifying a password's strength
 * as well as enforcing a security policy condusive to strong passwords.
 *
-* Includes a dictionary of the 10k most common passwords from Mike Burnett 
+* Includes a dictionary of the 10k most common passwords from Mike Burnett
 * (https://xato.net/passwords/more-top-worst-passwords) as well as an extensive
 * alphabetical dictionary of common terms. Checking passwords against a library
 * like this helps to prevent users from choosing passwords that wouldn't stand
 * up to even the simplest dictionary attacks. We also check the password for
 * "leetspeak" substitutions. While on the surface they may seem to make the
-* password stronger, their predictability actually makes it so that they do  
+* password stronger, their predictability actually makes it so that they do
 * little more for your password than using plain text characters.
 *
 * By combining the methods above with methods to measure the shannon entropy
@@ -29,38 +29,40 @@
 *
 *
 *
-* Example Usage: 
-* * * * * * * * * 
-*   $brutus = new Brutus();
+* Example Usage:
+* * * * * * * * *
+* $brutus = new Brutus();
 *
-*   if($brutus->badPass($password)) {
-*     foreach($brutus->showErrors() as $error) {
-*       echo $error.'<br>';
-*     }
+* if ($brutus->badPass($password)) {
+*   foreach ($brutus->showErrors() as $error) {
+*     echo $error.'<br>';
 *   }
-*   
+* }
+*
 */
 
 class Brutus {
 
   private $password = null;
-  private $lookup   = null;
+  private $lookup = null;
   private $hashpsec = 1000000000;
-  private $commons  = 'dictionary.txt';
+  private $dictionary = 'dictionary.txt';
+  private $commons = 'commons-freq.txt';
   private $passlist = array();
-  private $rules    = array();
-  private $errors   = array();
-  private $i18n     = array(
-    'minlen'   => 'Password cannot be less than %s characters',
-    'maxlen'   => 'Password cannot be greater than %s characters',
-    'lower'    => 'Password must contain at least %s lowercase leter%s',
-    'upper'    => 'Password must contain at least %s uppercase letter%s',
-    'numeric'  => 'Password must contain at least %s number%s',
-    'special'  => 'Password must contain at least %s special character%s',
-    'identity' => 'Password contains one or more personally identifiable tokens',
-    'common'   => 'Password was found in the list of most common passwords',
-    'entropy'  => 'Password must have at least %s bits of entropy; Currently at %s',
-    'brute'    => 'Password must survive %s days of brute force attempts; Currently at %s'
+  private $rules = array();
+  private $errors = array();
+  private $i18n = array(
+    'minlen'     => 'Password cannot be less than %s characters',
+    'maxlen'     => 'Password cannot be greater than %s characters',
+    'lower'      => 'Password must contain at least %s lowercase leter%s',
+    'upper'      => 'Password must contain at least %s uppercase letter%s',
+    'numeric'    => 'Password must contain at least %s number%s',
+    'special'    => 'Password must contain at least %s special character%s',
+    'identity'   => 'Password contains one or more personally identifiable tokens',
+    'commons'    => 'Password was found in the list of most common passwords',
+    'dictionary' => 'Password was found in the list of dictionary terms',
+    'entropy'    => 'Password must have at least %s bits of entropy; Currently at %s',
+    'brute'      => 'Password must survive %s days of brute force attempts; Currently at %s'
   );
   private $charSets = array(
     "0123456789", // numeric only
@@ -77,19 +79,12 @@ class Brutus {
   );
   
 
-  /**
-   * @var array $args all rules  necessary to setup and customize your own security policy enforcement protocols
-   * @var array $i18n an array of 10 k => v pairs containing localized error messages to be displayed to viewers on failure(s)
-   *
-   * If the internationalization (i18n) array is not passed the class will revert back to the default English messages.
-   * However, if the parameter IS passed, but is not exactly 10 k => v pairs, a new exception will be thrown.
-   */
-  public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1, 'entropy'=>30,'brute'=>60), $i18n=null) {
+  public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1, 'entropy'=>30,'brute'=>60,'usefile'=>null,'dataset'=>'commons'), $i18n=null) {
     foreach ($args as $arg => $val) {
       $this->rules[$arg] = $val;
     }
-    if (isset($i18n) && count($i18n) != 10) {
-      throw new Exception(sprintf('Internationalization array requires 10 entries; %s supplied.', count($arg)));
+    if (isset($i18n) && count($i18n) != 11) {
+      throw new Exception(sprintf('Internationalization array requires 11 entries; %s supplied.', count($arg)));
     }
   }
 
@@ -99,7 +94,7 @@ class Brutus {
     $this->checkLength();
     $this->checkComp();
     $this->check1337();
-    $this->checkDict();
+    $this->wordLookup();
     $this->userDetails();
     $this->getNISTbits();
     $this->simBrute();
@@ -138,7 +133,6 @@ class Brutus {
   }
 
   public function check1337() {
-    // don't put too much stuff here, it has exponential performance impact.
     $leet = array(
       '@'=>array('a', 'o'), '4'=>array('a'),
       '8'=>array('b'), '3'=>array('e'),
@@ -179,55 +173,120 @@ class Brutus {
     return $r;
   }
 
-  /**
-   * When checking a password which contains leetspeak, the performance index
-   * plummits... This is because currently, we're parsing the string to permute
-   * all possible combinations of characters in order to verify that no version
-   * of the "leet" password is included in the dictionary file. Unfortunately,
-   * this (based on password length) can very dramatically impact performance.
-   */
-  public function checkDict() {
+  public function wordLookup() {
     if ($this->rules['lookup']) {
-      if (!file_exists($this->commons)) {
-        throw new Exception('Common passwords file was not found');
-      }
-      if (!is_readable($this->commons)) {
-        throw new Exception('Common passwords file was not readable (check permissions)');
-      }
-      $file = fopen($this->commons,'rb');
-
-      /* foreach() before while()
-      foreach ($this->passlist as $password) {
-        $password = strtolower($password);
-        while (!feof($file)) {
-          $common = fgets($file);
-          $common = trim($common);
-          if ($common == $password) {
-            $this->errors[] = $this->i18n['common'];
-            return;
+      if (isset($this->rules['usefile'])) {
+        if ($this->rules['dataset'] == 'commons') {
+          $use_file = $this->commons;
+        }
+        else if ($this->rules['dataset'] == 'dictionary') {
+          $use_file = $this->dictionary;
+        }
+        else if ($this->rules['dataset'] == 'both') {
+          $use_file = array($this->commons, $this->dictionary);
+        }
+        else {
+          throw new Exception('Lookup file not specified');
+        }
+        if (is_array($use_file)) {
+          foreach ($use_file as $file_name) {
+            if (!file_exists($file_name)) {
+              throw new Exception('Lookup file not found');
+            }
+            if (!is_readable($file_name)) {
+              throw new Exception('Lookup file not readable (check permissions)');
+            }
+            $file = fopen($file_name,'rb');
+            $emsg = strpos($file_name, 'dictionary') ? 'dictionary' : 'commons';
+            while (!feof($file)) {
+              $common = fgets($file);
+              $common = trim($common);
+              foreach ($this->passlist as $password) {
+                $password = strtolower($password);
+                if ($common == $password) {
+                  $this->errors[] = $this->i18n[$emsg];
+                  return;
+                }
+              }
+            }
+            fclose($file);
+            unset($file, $text, $common);
           }
         }
-      }
-      */
-
-      /* while() before foreach() */
-      while (!feof($file)) {
-        $common = fgets($file);
-        $common = trim($common);
-        foreach ($this->passlist as $password) {
-          $password = strtolower($password);
-          if ($common == $password) {
-            $this->errors[] = $this->i18n['common'];
-            return;
+        else {
+          if (!file_exists($use_file)) {
+            throw new Exception('Lookup file not found');
           }
+          if (!is_readable($use_file)) {
+            throw new Exception('Lookup file not readable (check permissions)');
+          }
+          $file = fopen($use_file,'rb');
+          $emsg = strpos($use_file, 'dictionary') ? 'dictionary' : 'commons';
+          while (!feof($file)) {
+            $common = fgets($file);
+            $common = trim($common);
+            foreach ($this->passlist as $password) {
+              $password = strtolower($password);
+              if ($common == $password) {
+                $this->errors[] = $this->i18n[$emsg];
+                return;
+              }
+            }
+          }
+          fclose($file);
+          unset($file, $text, $common);
         }
       }
-      
-      fclose($file);
-      unset($file);
-      unset($text);
-      unset($common);
+      else {
+        if ($this->rules['dataset'] == 'commons') {
+          $table = 'commons';
+        }
+        else if ($this->rules['dataset'] == 'dictionary') {
+          $table = 'words';
+        }
+        else {
+          $table = array('commons', 'words');
+        }
+        try {
+          $db = new PDO(BRUTUS_DBTYPE.':host='.BRUTUS_DBHOST.';dbname='.BRUTUS_DBNAME, BRUTUS_DBUSER, BRUTUS_DBPASS);
+          $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+          $matches = 0;
+          foreach ($this->passlist as $password) {
+            if (is_array($table)) {
+              foreach ($table as $tbl) {
+                $stmt = $db->prepare("SELECT count(*) FROM $tbl WHERE `text` = :pass");
+                $stmt->bindParam(':pass', $password);
+                $stmt->execute(); 
+                if ($stmt->fetchColumn() > 0) {
+                  if ($tbl == 'words') {
+                    $this->errors[] = $this->i18n['dictionary'];
+                    return;
+                  }
+                  else {
+                    $this->errors[] = $this->i18n['commons'];
+                    return;
+                  }
+                }
+              }
+            }
+            else {
+              $stmt = $db->prepare("SELECT count(*) FROM $table WHERE `text` = :pass");
+              $stmt->bindParam(':pass', $password);
+              $stmt->execute();
+              if ($stmt->fetchColumn() > 0) {
+                $this->errors[] = $this->i18n[$table];
+                return;
+              }
+            }
+          }
+        }
+        catch (PDOException $e) {
+          throw new Exception($e->getMessage());
+        }
+      }
+      $db = null;
     }
+    return;
   }
 
   public function userDetails() {
@@ -296,10 +355,10 @@ class Brutus {
     // 6 bits can be granted if the password contains
     // a combination of mixed case, numbers, and symbols.
     // We assign each of these a value of 1.5 bits here.
-    if (preg_match('/[A-Z]/', $this->password)) $bits += 1.5;
-    if (preg_match('/[a-z]/', $this->password)) $bits += 1.5;
-    if (preg_match('/[0-9]/', $this->password)) $bits += 1.5;
-    if (preg_match('/[\W_]/', $this->password)) $bits += 1.5;
+    if (preg_match_all('/[A-Z]/', $this->password, $upper) >= $this->rules['upper'])  $bits += 1.5;
+    if (preg_match_all('/[a-z]/', $this->password, $lower) >= $this->rules['lower'])  $bits += 1.5;
+    if (preg_match_all('/[0-9]/', $this->password, $numbs) >= $this->rules['numeric'])  $bits += 1.5;
+    if (preg_match_all('/[\W_]/', $this->password, $specs) >= $this->rules['special'])  $bits += 1.5;
 
     if ($bits < $this->rules['entropy']) {
       $this->errors[] = sprintf($this->i18n['entropy'], $this->rules['entropy'], $bits);
@@ -320,7 +379,7 @@ class Brutus {
           break;
         }
       }
-      // If the character we were looking for wasn't anywhere in any of the 
+      // If the character we were looking for wasn't anywhere in any of the
       // character sets, assign the largest (last) character set as default.
       if (!$foundChar) {
         $base = end($this->CharacterSets);
@@ -338,16 +397,16 @@ class Brutus {
     // 9999 would be the last password they attempted (assuming 4 characters).
     // Thus a password/PIN of 6529 would take 6529 attempts until the attacker found
     // the proper combination. The same logic words for alphanumeric passwords, just
-    // with a larger number of possibilities for each position in the password. The 
+    // with a larger number of possibilities for each position in the password. The
     // key thing to note is the attacker doesn't need to test the entire range (every
     // possible combination of all characters) they just need to get to the point in
-    // the list of possibilities that is your password. They can (in this example) 
+    // the list of possibilities that is your password. They can (in this example)
     // ignore anything between 6530 and 9999. Using this logic, 'aaa' would be a worse
-    // password than 'zzz', because the attacker would encounter 'aaa' first. 
+    // password than 'zzz', because the attacker would encounter 'aaa' first.
     $attempts = 0;
     $charactersInBase = strlen($base);
     for ($position = 0; $position < $length; $position++) {
-      // We power up to the reverse position in the string. For example, if we're trying 
+      // We power up to the reverse position in the string. For example, if we're trying
       // to hack the 4 character PING code in the example above:
       // First number * (number of characters possible in the charset ^ length of password)
       // ie: 6 * (10^4) = 6000
@@ -359,7 +418,7 @@ class Brutus {
       // 9
       // Totals: 6000 + 500 + 20 + 9 = 6529 attempts before we encounter the correct password.
       $powerOf = $length - $position - 1;
-      // Character position within the base set. We add one on because strpos is base 
+      // Character position within the base set. We add one on because strpos is base
       // 0, we want base 1.
       $charAtPosition = strpos($base,$this->password[$position])+1;
       // If we're at the last character, simply add it's position in the character set
@@ -367,14 +426,14 @@ class Brutus {
       if ($powerOf==0) {
         $attempts = bcadd($attempts,$charAtPosition);
       }
-      // Otherwise we need to iterate through all the other characters positions to 
+      // Otherwise we need to iterate through all the other characters positions to
       // get here. For example, to find the 5 in 25 we can't just guess 2 and then 5
       // (even though Hollywood seems to insist this is possible), we need to try 0,1,
       // 2,3...15,16,17...23,24,25 (got it).
       else {
-        // This means we have to try every combination of values up to this point for 
-        // all previous characters. Which means we need to iterate through the entire 
-        // character set, X times, where X is our position -1. Then we need to multiply 
+        // This means we have to try every combination of values up to this point for
+        // all previous characters. Which means we need to iterate through the entire
+        // character set, X times, where X is our position -1. Then we need to multiply
         // that by this character's position.
 
         // Multiplier is the (10^4) or (10^3), etc in the pin code example above.
@@ -396,7 +455,7 @@ class Brutus {
     $days = bcdiv($attempts,$perDay);
 
     // If it's going to take more than a billion days to crack, just return a billion. This
-    // helps when code outside this function isn't using bcmath. Besides, if the password 
+    // helps when code outside this function isn't using bcmath. Besides, if the password
     // can survive 2.7 million years it's probably ok.
     if (bccomp($days,1000000000)==1) {
       $days = 1000000000;
