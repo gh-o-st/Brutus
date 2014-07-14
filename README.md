@@ -29,7 +29,7 @@ Todo
 - [x] modularize the functionality more efficiently
 - [x] original NIST entropy calculation + modified version
 - [x] id tokens passed directly to method rather than constructor
-- [ ] 2 methods for dictionary lookup; file or database
+- [x] 2 methods for dictionary lookup; file or database
 - [ ] PHPDoc commenting throughout
 - [ ] simplify the string translation method
 - [ ] MOAR PERFORMANCE TWEAKING!!!
