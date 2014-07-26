@@ -43,14 +43,53 @@
 
 class Brutus {
 
+  /**
+   * @var string $password Set to null at start, use param of primary method to modify
+   */
   private $password = null;
+
+  /**
+   * @var bool $lookup Set to null at start, use param of __construct() to modify
+   */
   private $lookup = null;
+
+  /**
+   * @var integer $hashpsec The simulated speed of attacker's system represented by
+   * how many hashes it can crank out per second. 1 billion by default (worst case)
+   */
   private $hashpsec = 1000000000;
+
+  /**
+   * @var string $dictionary The relative file path of the dictionary file to be used
+   */
   private $dictionary = 'dictionary.txt';
+
+  /**
+   * @var string $commons The relative file path of the common password file to be used
+   */
   private $commons = 'commons-freq.txt';
+
+  /**
+   * @var array $passlist An array of all possible permutations of a "leet" password
+   */
   private $passlist = array();
+
+  /**
+   * @var array $rules An array of rules to govern how we should grade a password
+   * (passed as parameter in the __construct() method)
+   */
   private $rules = array();
+
+  /**
+   * @var array $errors This array will be filled with entries if any errors are found
+   * during the grading of each password.
+   */
   private $errors = array();
+
+  /**
+   * @var array $i18n A list of English strings to be matched to each $errors type
+   * Custom strings for other languages can be passed in the __construct() method
+   */
   private $i18n = array(
     'minlen'     => 'Password cannot be less than %s characters',
     'maxlen'     => 'Password cannot be greater than %s characters',
@@ -64,8 +103,17 @@ class Brutus {
     'entropy'    => 'Password must have at least %s bits of entropy; Currently at %s',
     'brute'      => 'Password must survive %s days of brute force attempts; Currently at %s'
   );
+
+  /**
+   * @var array $charSets All possible character sets used in password(s) starting with simplest
+   *
+   * We start with the simplest character set (all numeric), and slowly work our way up increasing
+   * the complexity of the character set gradually so as to err in the attacker's favor by reducing
+   * the estimated keyspace needed to crack a particular password using brute force.
+   */
   private $charSets = array(
     "0123456789", // numeric only
+    "0123456789 ", // numeric + space
     "abcdefghijklmnopqrstuvwxyz", // lower alpha
     "abcdefghijklmnopqrstuvwxyz ", // lower alpha + space
     "abcdefghijklmnopqrstuvwxyz0123456789", // lower alphanumeric
@@ -78,16 +126,32 @@ class Brutus {
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+[]\"{}|;':,./<>?`~", // mixed alphanumeric + all symbols
   );
   
-
-  public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1, 'entropy'=>30,'brute'=>60,'usefile'=>null,'dataset'=>'commons'), $i18n=null) {
+  /**
+   * @param array $args The list of optional arguments which will be assigned to the $rules array
+   * @param mixed $i18n Set to NULL by default. If not null, should contain array to replace original strings
+   * @throws Exception If $i18n array does not contain the correct number of entries
+   */
+  public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1,'diminishing'=>true,'entropy'=>30,'brute'=>60,'usefile'=>null,'dataset'=>'commons'), $i18n=null) {
     foreach ($args as $arg => $val) {
       $this->rules[$arg] = $val;
     }
     if (isset($i18n) && count($i18n) != 11) {
-      throw new Exception(sprintf('Internationalization array requires 11 entries; %s supplied.', count($arg)));
+      throw new Exception(sprintf('Internationalization array requires 11 entries; %s supplied.', count($i18n)));
+    }
+    else {
+      foreach ($i18n as $k => $v) {
+        $this->i18n[$k] = $v;
+      }
     }
   }
 
+  /**
+   * This is the primary method associated with this class, but all it does it reference the other methods
+   * 
+   * @param string $password This string will replace the original NULL value of $this->password property
+   * @param mixed $id Should be an array (if set) of user-specific personally identifiable tokens
+   * @return bool Assumes FALSE (meaning NOT a bad password), $errors array sets to TRUE
+   */
   public function badPass($password, $id) {
     $this->password = $password;
     $this->rules['identity'] = $id;
@@ -104,11 +168,17 @@ class Brutus {
     return false;
   }
 
+  /**
+   * @return array The $errors array (defaults to empty array)
+   */
   public function showErrors() {
     return $this->errors;
   }
 
-  public function checkLength() {
+  /**
+   * Checks the length of the password and compares it against the corresponding rule in the $rules array
+   */
+  private function checkLength() {
     if (strlen($this->password) < $this->rules['minlen']) {
       $this->errors[] = sprintf($this->i18n['minlen'], $this->rules['minlen']);
     }
@@ -117,7 +187,10 @@ class Brutus {
     }
   }
 
-  public function checkComp() {
+  /**
+   * Checks the composition of the password and compares it against the corresponding rule in the $rules array
+   */
+  private function checkComp() {
     if (preg_match_all('/[a-z]/', $this->password, $lower) < $this->rules['lower']) {
       $this->errors[] = sprintf($this->i18n['lower'], $this->rules['lower'], ($this->rules['lower'] > 1) ? 's' : '');
     }
@@ -132,7 +205,7 @@ class Brutus {
     }
   }
 
-  public function check1337() {
+  private function check1337() {
     $leet = array(
       '@'=>array('a', 'o'), '4'=>array('a'),
       '8'=>array('b'), '3'=>array('e'),
@@ -155,7 +228,7 @@ class Brutus {
     $this->passlist = $this->populateList($map);
   }
 
-  public function populateList(&$map, $old = array(), $index = 0) {
+  private function populateList(&$map, $old = array(), $index = 0) {
     $new = array();
     foreach ($map[$index] as $char) {
       $c = count($old);
@@ -173,7 +246,7 @@ class Brutus {
     return $r;
   }
 
-  public function wordLookup() {
+  private function wordLookup() {
     if ($this->rules['lookup']) {
       if (isset($this->rules['usefile'])) {
         if ($this->rules['dataset'] == 'commons') {
@@ -289,7 +362,7 @@ class Brutus {
     return;
   }
 
-  public function userDetails() {
+  private function userDetails() {
     if (isset($this->rules['identity'])) {
       foreach ($this->rules['identity'] as $token) {
         foreach ($this->passlist as $password) {
@@ -302,7 +375,14 @@ class Brutus {
     }
   }
 
-  public function getNISTbits($diminishedReturns = false) {
+  /**
+   * Here we use the original NIST algorithm for calculating password entropy or
+   * a modified version of it (depending on the value of $this->rules['diminishing'])
+   * to calculate the estimated entropy of the password string.
+   *
+   * @return int A number representing how many bits of entropy the password has
+   */
+  private function getNISTbits() {
 
     $bits = $cnt = 0;
     $length = strlen($this->password);
@@ -311,7 +391,7 @@ class Brutus {
 
     // Run the original NIST algorithm which
     // has no penalty for repeated characters
-    if (!$diminishedReturns) {
+    if (!$this->rules['diminishing']) {
       foreach ($char_map as $char) {
         $cnt++;
         if ($cnt == 1) {
@@ -365,7 +445,39 @@ class Brutus {
     }
   }
 
-  public function simBrute() {
+  /**
+   * The following method was taken directly from the Mellt class by ravisorg (https://github.com/ravisorg/Mellt)
+   *
+   * @author ravisorg
+   * Copyright (c) 2012, ravisorg
+   * All rights reserved.
+   *
+   * @license BSD
+   * Redistribution and use in source and binary forms, with or without
+   * modification, are permitted provided that the following conditions are met:
+   *     * Redistributions of source code must retain the above copyright
+   *       notice, this list of conditions and the following disclaimer.
+   *     * Redistributions in binary form must reproduce the above copyright
+   *       notice, this list of conditions and the following disclaimer in the
+   *       documentation and/or other materials provided with the distribution.
+   *     * Neither the name of the Travis Richardson nor the names of its 
+   *       contributors may be used to endorse or promote products derived 
+   *       from this software without specific prior written permission.
+   *
+   * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+   * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+   * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+   * DISCLAIMED. IN NO EVENT SHALL TRAVIS RICHARDSON BE LIABLE FOR ANY
+   * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+   * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+   * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+   * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+   * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+   * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+   *
+   * @return int The number of days it would take to brute force the password
+   */
+  private function simBrute() {
     $base = ''; $baseKey = NULL;
     $length = strlen($this->password);
     for ($t = 0; $t < $length; $t++) {
