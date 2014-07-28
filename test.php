@@ -57,6 +57,34 @@ catch (Exception $e) {
 }
 
 
+$bits = $cnt = 0;
+$char_map = str_split($this->password);
+$char_arr = array_fill(0, 256, 1);
+for ($cnt = 0; $cnt < strlen($password); $cnt++) {
+  $tmp = ord(substr($password, $cnt, 1));
+
+  # Assign 4 bits for the 1st char
+  if ($cnt == 1) {
+    $bits += 4;
+  }
+
+  # Assign 
+  elseif ($cnt > 1 && $cnt <= 8) {
+    $bits += $char_arr[$tmp] * 2;
+    echo '$char_arr[$tmp] * 2 = '.$char_arr[$tmp] * 2.'<br>';
+  }
+  elseif ($cnt > 8 && $cnt <= 20) {
+    $bits += $char_arr[$tmp] * 1.5;
+    echo '$char_arr[$tmp] * 1.5 = '.$char_arr[$tmp] * 1.5.'<br>';
+  }
+  else {
+    $bits += $char_arr[$tmp];
+    echo '$char_arr[$tmp] = '.$char_arr[$tmp].'<br>';
+  }
+  $char_arr[$tmp] *= 0.75;
+  echo '$char_arr[$tmp] * 0.75 = '.$char_arr[$tmp] *= 0.75.'<br>';
+}
+
 ?>
 
 <form method="post" action="">
