@@ -10,18 +10,18 @@ Default Args
 The entire array seen below is passed to the `__construct()` method, so if the defaults are fine with you then there's no reason to pass anything in the instansiation of the class. However, if you wish to pass your own custom values, you must use the same key names in the array for the class methods to function properly.
 ```php
 $args = array(
-  'brute' => 60,
-  'lower' => 2,
-  'upper' => 2,
-  'number' => 1,
-  'minlen' => 10,
-  'maxlen' => 50,
-  'lookup' => true,
-  'special' => 1,
-  'entropy' => 30,
-  'usefile' => null,
-  'dataset' => 'commons',
-  'diminishing' => true,
+  'brute' => 60, //How long the password should survive a continued brute force attack
+  'lower' => 2, //The number of lowercase letters required
+  'upper' => 2, //The number of uppercase letters required
+  'number' => 1, //The number of numeric characters required
+  'minlen' => 10, //The minimum length of the password (less than 10 is discouraged)
+  'maxlen' => 50, //The maximum length of the password
+  'lookup' => true, //Whether or not to check the password against the dictionar(y/ies)
+  'special' => 1, //The number of special characters required in the password
+  'entropy' => 30, //The number of entropic bits the password must have
+  'usefile' => null, //Whether to use a physical file instead of a database
+  'dataset' => 'commons', //Which dictionary to use (commons, dictionary, both)
+  'diminishing' => true, //Whether to penalize a password for repetitive characters
 );
 ```
 
