@@ -11,7 +11,7 @@ Usage & `$args`
 $args = array(
   'brute' => 60,
   'lower' => 2,
-  'upper' => 2',
+  'upper' => 2,
   'number' => 1,
   'minlen' => 10,
   'maxlen' => 50,
