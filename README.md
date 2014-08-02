@@ -53,5 +53,6 @@ Todo
 - [x] id tokens passed directly to method rather than constructor
 - [x] 2 methods for dictionary lookup; file or database
 - [x] PHPDoc commenting throughout
+- [ ] Modify `__construct()` to allow a partial array to be passed
 - [ ] simplify the string translation method
 - [ ] MOAR PERFORMANCE TWEAKING!!!
