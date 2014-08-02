@@ -7,6 +7,7 @@ Includes a dictionary file of the 10k most common passwords (kudos Mark Burnett)
 
 Default Args
 -----
+Everything in this array is set as seen below in the `__construct()` method, so if the defaults are fine with you, there's no reason to pass anything in the instansiation of the class. However, if you wish to pass your own custom values, you may do so, but each key must be named correctly for the class methods to function properly.
 ```php
 $args = array(
   'brute' => 60,
