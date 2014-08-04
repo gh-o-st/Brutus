@@ -199,20 +199,25 @@ class Brutus {
     if (!$this->correctLength()) {
       return false;
     }
+
     if (!$this->correctComp()) {
       return false;
     }
+
     if ($this->getNISTbits() < $this->rules['entropy']) {
       $this->errors[] = sprintf($this->i18n['entropy'], $this->rules['entropy'], $bits);
       return false;
     }
+
     if ($this->simBrute() < $this->rules['brute']) {
       $this->errors[] = sprintf($this->i18n['brute'], $this->rules['brute'], $days);
       return false;
     }
+
     if (!$this->noTokens()) {
       return false;
     }
+
     if ($this->hasMatch()) {
       return false;
     }
@@ -270,11 +275,10 @@ class Brutus {
 
   public function convert1337() {
     $leet = array(
-      '@'=>array('a', 'o'), '4'=>array('a'),
-      '8'=>array('b'), '3'=>array('e'),
+      '@'=>array('a'), '4'=>array('a'), '7' => array('t'),
+      '8'=>array('b'), '3'=>array('e'), '6'=>array('b'),
       '1'=>array('i', 'l'), '!'=>array('i','l','1'),
-      '0'=>array('o'), '$'=>array('s','5'),
-      '5'=>array('s'), '6'=>array('b', 'd'), '7'=>array('t')
+      '0'=>array('o'), '$'=>array('s'), '5'=>array('s'),
     );
     $map = array();
     $pass_array = str_split(strtolower($this->password));
@@ -309,32 +313,25 @@ class Brutus {
     return $r;
   }
 
-  protected function hasMatch() {
+  public function hasMatch() {
     if ($this->rules['lookup']) {
       if (empty($this->passlist)) {
         $this->convert1337();
       }
       if (isset($this->rules['usefile'])) {
-        if (!file_exists($file_name)) {
+        if (!file_exists($this->commons)) {
           throw new Exception('Lookup file not found');
         }
-        if (!is_readable($file_name)) {
+        if (!is_readable($this->commons)) {
           throw new Exception('Lookup file not readable (check permissions)');
         }
-        $file = fopen($file_name,'rb');
-        while (!feof($file)) {
-          $common = fgets($file);
-          $common = trim($common);
-          foreach ($this->passlist as $password) {
-            $password = strtolower($password);
-            if ($common == $password) {
-              $this->errors[] = $this->i18n['commons'];
-              return true;
-            }
-          }
+        $commons = file($this->commons);
+        $matched = array_intersect($commons, $this->passlist);
+        if (count($matched) > 0) {
+          $this->errors[] = $this->i18n['commons'];
+          return true;
         }
-        fclose($file);
-        unset($file, $text, $common);
+
       }
       else {
         try {
@@ -342,7 +339,7 @@ class Brutus {
           $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
           $matches = 0;
           foreach ($this->passlist as $password) {
-            $stmt = $db->prepare("SELECT count(*) FROM `commons` WHERE `text` = :pass");
+            $stmt = $db->prepare("SELECT count(*) FROM `passwords` WHERE `text` = :pass");
             $stmt->bindParam(':pass', $password);
             $stmt->execute();
             if ($stmt->fetchColumn() > 0) {
@@ -391,6 +388,7 @@ class Brutus {
         }
       }
     }
+    return true;
   }
 
   /**
