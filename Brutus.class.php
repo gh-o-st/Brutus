@@ -167,11 +167,11 @@ class Brutus {
     # Set remaining keys to default values
     foreach ($defaults as $key => $val) {
       if (!array_key_exists($key, $this->rules)) {
-        $this->rules[$key] = ($key == 'minlen' && $val < 10) ? 10 : $val;
+        $this->rules[$key] = $val;
       }
     }
 
-    # The only way these exceptions will be thrown is if you fail to use the
+    # The only way this exception will be thrown is if you fail to use the
     # exact same key names in the custom configuration you pass to the __construct(),
     # thus causing comparison to fail and additional keys to be added
     if (count($this->rules) > count($defaults)) {
