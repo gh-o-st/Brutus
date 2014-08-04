@@ -159,15 +159,14 @@ class Brutus {
     # Check for custom configuration entries
     if (!empty($args)) {
       foreach ($args as $key => $val) {
-        # WARNING!!! Dragons will eat your babies <--------------------------+
-        $this->rules[$key] = ($key == 'minlen' && $val < 10) ? 10 : $val;#   |
-      }                                                                  #   |
-    }                                                                    #   |
-                                                                         #   |
-    # Set remaining keys to default values                               #   |
-    foreach ($defaults as $key => $val) {                                #   |
-      if (!array_key_exists($key, $this->rules)) {                       #   |
-        # WARNING!!! If you change these minimum fallbacks <-----------------+
+        # WARNING!!! Dragons will eat your babies if you change this default fallback
+        $this->rules[$key] = ($key == 'minlen' && $val < 10) ? 10 : $val;
+      }
+    }
+
+    # Set remaining keys to default values
+    foreach ($defaults as $key => $val) {
+      if (!array_key_exists($key, $this->rules)) {
         $this->rules[$key] = ($key == 'minlen' && $val < 10) ? 10 : $val;
       }
     }
