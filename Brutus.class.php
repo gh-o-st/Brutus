@@ -46,17 +46,12 @@ class Brutus {
   /**
    * @var string $password Set to null at start, use param of primary method to modify
    */
-  private $password = null;
+  protected $password = null;
 
   /**
    * @var int $passlen The length of the password currently being tested
    */
-  private $passlen = 0;
-
-  /**
-   * @var bool $lookup Set to null at start, use param of __construct() to modify
-   */
-  private $lookup = null;
+  protected $passlen = 0;
 
   /**
    * @var integer $hashpsec The simulated speed of attacker's system represented by
@@ -65,48 +60,42 @@ class Brutus {
   private $hashpsec = 1000000000;
 
   /**
-   * @var string $dictionary The relative file path of the dictionary file to be used
-   */
-  private $dictionary = 'dictionary.txt';
-
-  /**
    * @var string $commons The relative file path of the common password file to be used
    */
-  private $commons = 'commons-freq.txt';
+  private $commons = 'commons.txt';
 
   /**
    * @var array $passlist An array of all possible permutations of a "leet" password
    */
-  private $passlist = array();
+  public $passlist = array();
 
   /**
    * @var array $rules An array of rules to govern how we should grade a password
    * (passed as parameter in the __construct() method)
    */
-  private $rules = array();
+  protected $rules = array();
 
   /**
    * @var array $errors This array will be filled with entries if any errors are found
    * during the grading of each password.
    */
-  private $errors = array();
+  protected $errors = array();
 
   /**
    * @var array $i18n A list of English strings to be matched to each $errors type
    * Custom strings for other languages can be passed in the __construct() method
    */
   private $i18n = array(
-    'minlen'     => 'Password cannot be less than %s characters',
-    'maxlen'     => 'Password cannot be greater than %s characters',
-    'lower'      => 'Password must contain at least %s lowercase leter%s',
-    'upper'      => 'Password must contain at least %s uppercase letter%s',
-    'numeric'    => 'Password must contain at least %s number%s',
-    'special'    => 'Password must contain at least %s special character%s',
-    'identity'   => 'Password contains one or more personally identifiable tokens',
-    'commons'    => 'Password was found in the list of most common passwords',
-    'dictionary' => 'Password was found in the list of dictionary terms',
-    'entropy'    => 'Password must have at least %s bits of entropy; Currently at %s',
-    'brute'      => 'Password must survive %s days of brute force attempts; Currently at %s'
+    'brute' => 'Password must survive %s days of brute force attempts; Currently at %s',
+    'upper' => 'Password must contain at least %s uppercase letter%s',
+    'lower' => 'Password must contain at least %s lowercase leter%s',
+    'minlen' => 'Password cannot be less than %s characters',
+    'maxlen' => 'Password cannot be greater than %s characters',
+    'number' => 'Password must contain at least %s number%s',
+    'special' => 'Password must contain at least %s special character%s',
+    'entropy' => 'Password must have at least %s bits of entropy; Currently at %s',
+    'commons' => 'Password was found in the list of most common passwords',
+    'identity' => 'Password contains one or more personally identifiable tokens'
   );
 
   /**
@@ -117,47 +106,89 @@ class Brutus {
    * the estimated keyspace needed to crack a particular password using brute force.
    */
   private $charSets = array(
-    "0123456789", # numeric only
-    "0123456789 ", # numeric + space
-    "abcdefghijklmnopqrstuvwxyz", # lower alpha
-    "abcdefghijklmnopqrstuvwxyz ", # lower alpha + space
-    "abcdefghijklmnopqrstuvwxyz0123456789", # lower alphanumeric
-    "abcdefghijklmnopqrstuvwxyz0123456789 ", # lower alphanumeric + space
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", # mixed alpha
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ", # mixed alpha + space
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", # mixed alphanumeric
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ", # mixed alphanumeric + space
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+ ", # mixed alphanumeric + primary symbols
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+[]\"{}|;':,./<>?`~", # mixed alphanumeric + all symbols
+    "0123456789", #numeric
+    "0123456789 ", #numeric + space
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ", #UPPERCASE
+    "abcdefghijklmnopqrstuvwxyz", #lowercase
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ ", #UPPERCASE + space
+    "abcdefghijklmnopqrstuvwxyz ", #lowercase + space
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", #UPPERCASE alphanumeric
+    "abcdefghijklmnopqrstuvwxyz0123456789", #lowercase alphanumeric
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ", #UPPERCASE alphanumeric + space
+    "abcdefghijklmnopqrstuvwxyz0123456789 ", #lowercase alphanumeric + space
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", #MIXEDcase
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ", #MIXEDcase alpha + space
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", #MIXEDcase alphanumeric
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ", #MIXEDcase alphanumeric + space
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+ ", #MIXEDcase alphanumeric + primary symbols
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-=_+[]\"{}|;':,./<>?`~ " #MIXEDcase alphanumeric + all symbols
   );
-  
+
   /**
    * @param array $args The list of optional arguments which will be assigned to the $rules array
    * @param mixed $i18n Set to NULL by default. If not null, should contain array to replace original strings
    * @throws Exception If $i18n array does not contain the correct number of entries
    */
-  public function __construct($args=array('minlen'=>10,'maxlen'=>50,'lookup'=>true,'lower'=>2,'upper'=>2,'numeric'=>1,'special'=>1,'diminishing'=>true,'entropy'=>30,'brute'=>60,'usefile'=>null,'dataset'=>'commons'), $i18n=null) {
-    foreach ($args as $arg => $val) {
-      $this->rules[$arg] = $val;
-    }
-    if (isset($i18n) && count($i18n) != 11) {
-      throw new Exception(sprintf('Internationalization array requires 11 entries; %s supplied.', count($i18n)));
-    }
-    else {
-      foreach ($i18n as $k => $v) {
-        $this->i18n[$k] = $v;
+  public function __construct($args=array()) {
+
+    /*
+     *****************************************************************************************
+     *            _  _ ___ ___ ___   ___ ___   ___  ___    _   ___  ___  _  _ ___            *
+     *           | || | __| _ \ __| | _ ) __| |   \| _ \  /_\ / __|/ _ \| \| / __|           *
+     *           | __ | _||   / _|  | _ \ _|  | |) |   / / _ \ (_ | (_) | .` \__ \           *
+     *           |_||_|___|_|_\___| |___/___| |___/|_|_\/_/ \_\___|\___/|_|\_|___/           *
+     *                                                                                       *
+     *****************************************************************************************
+    */
+
+    # Setup the default options
+    $defaults = array(
+      'brute' => 60, # How long (in days) the password should survive a continued brute force attack
+      'lower' => 2, # The number of lowercase letters required
+      'upper' => 2, # The number of uppercase letters required
+      'number' => 1, # The number of numeric characters required
+      'minlen' => 10, # The minimum length of the password (less than 10 is strongly discouraged)
+      'maxlen' => 50, # The maximum length of the password
+      'lookup' => true, # Whether or not to check the password against the 10k most common
+      'special' => 1, # The number of special characters required in the password
+      'entropy' => 30, # The number of entropic bits the password must have
+      'usefile' => null, # Whether to use a physical file instead of a database
+      'diminishing' => true # Whether to penalize a password for repetitive characters
+    );
+
+    # Check for custom configuration entries
+    if (!empty($args)) {
+      foreach ($args as $key => $val) {
+        # WARNING!!! Dragons will eat your babies <--------------------------+
+        $this->rules[$key] = ($key == 'minlen' && $val < 10) ? 10 : $val;#   |
+      }                                                                  #   |
+    }                                                                    #   |
+                                                                         #   |
+    # Set remaining keys to default values                               #   |
+    foreach ($defaults as $key => $val) {                                #   |
+      if (!array_key_exists($key, $this->rules)) {                       #   |
+        # WARNING!!! If you change these minimum fallbacks <-----------------+
+        $this->rules[$key] = ($key == 'minlen' && $val < 10) ? 10 : $val;
       }
     }
+
+    # The only way these exceptions will be thrown is if you fail to use the
+    # exact same key names in the custom configuration you pass to the __construct(),
+    # thus causing comparison to fail and additional keys to be added
+    if (count($this->rules) > count($defaults)) {
+      throw new Exception("Malformed rules array (too many entries)");
+    }
+
   }
 
   /**
    * This is the primary method associated with this class, but all it does it reference the other methods
-   * 
+   *
    * @param string $password This string will replace the original NULL value of $this->password property
    * @param mixed $id Should be an array (if set) of user-specific personally identifiable tokens
-   * @return bool Assumes FALSE (meaning NOT a bad password), $errors array sets to TRUE
+   * @return bool Assumes TRUE (meaning NOT a bad password), $errors causes FALSE return
    */
-  public function badPass($password, $id=null) {
+  public function testsPassed($password, $id=null) {
 
     # Set the password, passlen, and rules['identity']
     # properties so they can be used by other methods
@@ -165,20 +196,29 @@ class Brutus {
     $this->rules['identity'] = $id;
     $this->passlen = strlen($this->password);
 
-    # Run tests and set $errors accordingly
-    $this->checkLength();
-    $this->checkComp();
-    $this->check1337();
-    $this->wordLookup();
-    $this->userDetails();
-    $this->getNISTbits();
-    $this->simBrute();
-
-    # If $errors set, return true (bad pass)
-    if (count($this->errors) > 0) {
-      return true;
+    # Run all tests, but break out on first error
+    if (!$this->correctLength()) {
+      return false;
     }
-    return false;
+    if (!$this->correctComp()) {
+      return false;
+    }
+    if ($this->getNISTbits() < $this->rules['entropy']) {
+      $this->errors[] = sprintf($this->i18n['entropy'], $this->rules['entropy'], $bits);
+      return false;
+    }
+    if ($this->simBrute() < $this->rules['brute']) {
+      $this->errors[] = sprintf($this->i18n['brute'], $this->rules['brute'], $days);
+      return false;
+    }
+    if (!$this->noTokens()) {
+      return false;
+    }
+    if ($this->hasMatch()) {
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -189,36 +229,47 @@ class Brutus {
   }
 
   /**
-   * Checks the length of the password and compares it against the corresponding $rules[]
+   * Checks the length of the password and compares it against the corresponding $rules
    */
-  public function checkLength() {
+  protected function correctLength() {
     if ($this->passlen < $this->rules['minlen']) {
       $this->errors[] = sprintf($this->i18n['minlen'], $this->rules['minlen']);
+      return false;
     }
     else if ($this->passlen > $this->rules['maxlen']) {
       $this->errors[] = sprintf($this->i18n['maxlen'], $this->rules['maxlen']);
+      return false;
     }
+    if ($this->rules['minlen'] < 10) {
+      throw new Exception("Smaug just ate your baby... Don't say I didn't warn you.");
+    }
+    return true;
   }
 
   /**
    * Checks the composition of the password and compares it against the corresponding $rules[]
    */
-  public function checkComp() {
+  protected function correctComp() {
     if (preg_match_all('/[a-z]/', $this->password, $lower) < $this->rules['lower']) {
       $this->errors[] = sprintf($this->i18n['lower'], $this->rules['lower'], ($this->rules['lower'] > 1) ? 's' : '');
+      return false;
     }
     if (preg_match_all('/[A-Z]/', $this->password, $upper) < $this->rules['upper']) {
       $this->errors[] = sprintf($this->i18n['upper'], $this->rules['upper'], ($this->rules['upper'] > 1) ? 's' : '');
+      return false;
     }
-    if (preg_match_all('/[0-9]/', $this->password, $numbers) < $this->rules['numeric']) {
-      $this->errors[] = sprintf($this->i18n['numeric'], $this->rules['numeric'], ($this->rules['numeric'] > 1) ? 's' : '');
+    if (preg_match_all('/[0-9]/', $this->password, $numbers) < $this->rules['number']) {
+      $this->errors[] = sprintf($this->i18n['number'], $this->rules['number'], ($this->rules['number'] > 1) ? 's' : '');
+      return false;
     }
     if (preg_match_all('/[\W_]/', $this->password, $special) < $this->rules['special']) {
       $this->errors[] = sprintf($this->i18n['special'], $this->rules['special'], ($this->rules['special'] > 1) ? 's' : '');
+      return false;
     }
+    return true;
   }
 
-  public function check1337() {
+  public function convert1337() {
     $leet = array(
       '@'=>array('a', 'o'), '4'=>array('a'),
       '8'=>array('b'), '3'=>array('e'),
@@ -238,10 +289,10 @@ class Brutus {
         }
       }
     }
-    $this->passlist = $this->populateList($map);
+    $this->passlist = $this->leetVariations($map);
   }
 
-  public function populateList(&$map, $old = array(), $index = 0) {
+  public function leetVariations(&$map, $old = array(), $index = 0) {
     $new = array();
     foreach ($map[$index] as $char) {
       $c = count($old);
@@ -255,124 +306,59 @@ class Brutus {
       }
     }
     unset($old);
-    $r = ($index == count($map)-1) ? $new : $this->populateList($map, $new, $index + 1);
+    $r = ($index == count($map)-1) ? $new : $this->leetVariations($map, $new, $index + 1);
     return $r;
   }
 
-  public function wordLookup() {
+  protected function hasMatch() {
     if ($this->rules['lookup']) {
+      if (empty($this->passlist)) {
+        $this->convert1337();
+      }
       if (isset($this->rules['usefile'])) {
-        if ($this->rules['dataset'] == 'commons') {
-          $use_file = $this->commons;
+        if (!file_exists($file_name)) {
+          throw new Exception('Lookup file not found');
         }
-        else if ($this->rules['dataset'] == 'dictionary') {
-          $use_file = $this->dictionary;
+        if (!is_readable($file_name)) {
+          throw new Exception('Lookup file not readable (check permissions)');
         }
-        else if ($this->rules['dataset'] == 'both') {
-          $use_file = array($this->commons, $this->dictionary);
-        }
-        else {
-          throw new Exception('Lookup file not specified');
-        }
-        if (is_array($use_file)) {
-          foreach ($use_file as $file_name) {
-            if (!file_exists($file_name)) {
-              throw new Exception('Lookup file not found');
-            }
-            if (!is_readable($file_name)) {
-              throw new Exception('Lookup file not readable (check permissions)');
-            }
-            $file = fopen($file_name,'rb');
-            $emsg = strpos($file_name, 'dictionary') ? 'dictionary' : 'commons';
-            while (!feof($file)) {
-              $common = fgets($file);
-              $common = trim($common);
-              foreach ($this->passlist as $password) {
-                $password = strtolower($password);
-                if ($common == $password) {
-                  $this->errors[] = $this->i18n[$emsg];
-                  return;
-                }
-              }
-            }
-            fclose($file);
-            unset($file, $text, $common);
-          }
-        }
-        else {
-          if (!file_exists($use_file)) {
-            throw new Exception('Lookup file not found');
-          }
-          if (!is_readable($use_file)) {
-            throw new Exception('Lookup file not readable (check permissions)');
-          }
-          $file = fopen($use_file,'rb');
-          $emsg = strpos($use_file, 'dictionary') ? 'dictionary' : 'commons';
-          while (!feof($file)) {
-            $common = fgets($file);
-            $common = trim($common);
-            foreach ($this->passlist as $password) {
-              $password = strtolower($password);
-              if ($common == $password) {
-                $this->errors[] = $this->i18n[$emsg];
-                return;
-              }
+        $file = fopen($file_name,'rb');
+        while (!feof($file)) {
+          $common = fgets($file);
+          $common = trim($common);
+          foreach ($this->passlist as $password) {
+            $password = strtolower($password);
+            if ($common == $password) {
+              $this->errors[] = $this->i18n['commons'];
+              return true;
             }
           }
-          fclose($file);
-          unset($file, $text, $common);
         }
+        fclose($file);
+        unset($file, $text, $common);
       }
       else {
-        if ($this->rules['dataset'] == 'commons') {
-          $table = 'commons';
-        }
-        else if ($this->rules['dataset'] == 'dictionary') {
-          $table = 'words';
-        }
-        else {
-          $table = array('commons', 'words');
-        }
         try {
           $db = new PDO(BRUTUS_DBTYPE.':host='.BRUTUS_DBHOST.';dbname='.BRUTUS_DBNAME, BRUTUS_DBUSER, BRUTUS_DBPASS);
           $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
           $matches = 0;
           foreach ($this->passlist as $password) {
-            if (is_array($table)) {
-              foreach ($table as $tbl) {
-                $stmt = $db->prepare("SELECT count(*) FROM $tbl WHERE `text` = :pass");
-                $stmt->bindParam(':pass', $password);
-                $stmt->execute(); 
-                if ($stmt->fetchColumn() > 0) {
-                  if ($tbl == 'words') {
-                    $this->errors[] = $this->i18n['dictionary'];
-                    return;
-                  }
-                  else {
-                    $this->errors[] = $this->i18n['commons'];
-                    return;
-                  }
-                }
-              }
-            }
-            else {
-              $stmt = $db->prepare("SELECT count(*) FROM $table WHERE `text` = :pass");
-              $stmt->bindParam(':pass', $password);
-              $stmt->execute();
-              if ($stmt->fetchColumn() > 0) {
-                $this->errors[] = $this->i18n[$table];
-                return;
-              }
+            $stmt = $db->prepare("SELECT count(*) FROM `commons` WHERE `text` = :pass");
+            $stmt->bindParam(':pass', $password);
+            $stmt->execute();
+            if ($stmt->fetchColumn() > 0) {
+              $this->errors[] = $this->i18n['commons'];
+              return true;
             }
           }
         }
         catch (PDOException $e) {
           throw new Exception($e->getMessage());
         }
+        $db = null;
       }
-      $db = null;
     }
-    return;
+    return false;
   }
 
   /**
@@ -382,35 +368,38 @@ class Brutus {
    * @throws Exception if $this->rules['identity'] < 1
    * @throws Exception if $this->rules['identity'] !is_array()
    */
-  public function userDetails() {
+  protected function noTokens() {
     if (isset($this->rules['identity'])) {
-      if (is_array($this->rules['identity'])) {
-        if (count($this->rules['identity']) > 0) {
+      if (!is_array($this->rules['identity'])) {
+        throw new Exception("Identity tokens not passed as array");
+      }
+      else {
+        if (empty($this->rules['identity'])) {
+          throw new Exception("Identity array is empty");
+        }
+        else {
+          if (empty($this->passlist)) {
+            $this->convert1337();
+          }
           foreach ($this->rules['identity'] as $token) {
             foreach ($this->passlist as $password) {
               if (preg_match("/$token/i", $password)) {
                 $this->errors[] = $this->i18n['identity'];
-                return;
+                return false;
               }
             }
           }
         }
-        else {
-          throw new Exception("Identity array is empty");
-        }
-      }
-      else {
-        throw new Exception("Identity tokens not passed as array");
       }
     }
   }
 
   /**
-   * Here we use the original NIST algorithm for calculating password entropy or
-   * a modified version of it (depending on the value of $this->rules['diminishing'])
+   * We use the original NIST algorithm for calculating password entropy or a
+   * modified version of it (depending on the value of $this->rules['diminishing'])
    * to calculate the estimated entropy of the password string.
    */
-  public function getNISTbits() {
+  protected function getNISTbits() {
 
     $bits = $cnt = 0;
     $char_map = str_split($this->password);
@@ -492,12 +481,11 @@ class Brutus {
     # We assign each of these a value of 1.5 bits here.
     if (preg_match_all('/[A-Z]/', $this->password, $upper) >= $this->rules['upper'])  $bits += 1.5;
     if (preg_match_all('/[a-z]/', $this->password, $lower) >= $this->rules['lower'])  $bits += 1.5;
-    if (preg_match_all('/[0-9]/', $this->password, $numbs) >= $this->rules['numeric'])  $bits += 1.5;
+    if (preg_match_all('/[0-9]/', $this->password, $numbs) >= $this->rules['number'])  $bits += 1.5;
     if (preg_match_all('/[\W_]/', $this->password, $specs) >= $this->rules['special'])  $bits += 1.5;
 
-    if ($bits < $this->rules['entropy']) {
-      $this->errors[] = sprintf($this->i18n['entropy'], $this->rules['entropy'], $bits);
-    }
+    # Return result and exit
+    return $bits;
   }
 
   /**
@@ -515,8 +503,8 @@ class Brutus {
    *     * Redistributions in binary form must reproduce the above copyright
    *       notice, this list of conditions and the following disclaimer in the
    *       documentation and/or other materials provided with the distribution.
-   *     * Neither the name of the Travis Richardson nor the names of its 
-   *       contributors may be used to endorse or promote products derived 
+   *     * Neither the name of the Travis Richardson nor the names of its
+   *       contributors may be used to endorse or promote products derived
    *       from this software without specific prior written permission.
    *
    * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
@@ -530,7 +518,7 @@ class Brutus {
    * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    */
-  public function simBrute() {
+  protected function simBrute() {
     $base = ''; $baseKey = NULL;
     for ($t = 0; $t < $this->passlen; $t++) {
       $char = $this->password[$t];
@@ -546,7 +534,7 @@ class Brutus {
       # If the character we were looking for wasn't anywhere in any of the
       # character sets, assign the largest (last) character set as default.
       if (!$foundChar) {
-        $base = end($this->CharacterSets);
+        $base = end($this->charSets);
         break;
       }
     }
@@ -606,7 +594,7 @@ class Brutus {
         $attempts = bcadd($attempts,$newAttempts);
       }
     }
-    
+
     # We can (worst case) try one billion passwords per second. Calculate how many days
     # it will take us to get to the password using only brute force attempts.
     $perDay = bcmul($this->hashpsec,60*60*24);
@@ -622,10 +610,8 @@ class Brutus {
     if (bccomp($days,1000000000)==1) {
       $days = 1000000000;
     }
-    
-    # Set the $error if the password won't stand up to the required number of days
-    if ($days < $this->rules['brute']) {
-      $this->errors[] = sprintf($this->i18n['brute'], $this->rules['brute'], $days);
-    }
+
+    # Return result and exit
+    return $days;
   }
 }
