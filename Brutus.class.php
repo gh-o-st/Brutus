@@ -67,7 +67,7 @@ class Brutus {
   /**
    * @var array $passlist An array of all possible permutations of a "leet" password
    */
-  public $passlist = array();
+  protected $passlist = array();
 
   /**
    * @var array $rules An array of rules to govern how we should grade a password
@@ -181,7 +181,12 @@ class Brutus {
   }
 
   /**
-   * This is the primary method associated with this class, but all it does it reference the other methods
+   * This is the primary method associated with this class, but all it does it reference the other methods.
+   *
+   * The idea here is that we start out with the least resource intensive checks first, and work our way
+   * down to those which can (depending on length of password to be checked) consume a large amount of
+   * system resources. We also break out of the function upon encountering the first error, so as to
+   * prevent running anything more than what's absolutely necessary to fail a password.
    *
    * @param string $password This string will replace the original NULL value of $this->password property
    * @param mixed $id Should be an array (if set) of user-specific personally identifiable tokens
@@ -189,46 +194,27 @@ class Brutus {
    */
   public function testsPassed($password, $id=null) {
 
-    # Set the password, passlen, and rules['identity']
-    # properties so they can be used by other methods
+    # Setup additional vars for later
     $this->password = $password;
     $this->rules['identity'] = $id;
     $this->passlen = strlen($this->password);
 
     # Run all tests, but break out on first error
-    if (!$this->correctLength()) {
-      return false;
-    }
+    if (!$this->correctLength())  return false;
+    if (!$this->correctComp())   return false;
+    if (!$this->correctBits())  return false;
+    if (!$this->correctDays()) return false;
+    if (!$this->noTokens())   return false;
+    if ($this->hasMatch())   return false;
 
-    if (!$this->correctComp()) {
-      return false;
-    }
-
-    if ($this->getNISTbits() < $this->rules['entropy']) {
-      $this->errors[] = sprintf($this->i18n['entropy'], $this->rules['entropy'], $bits);
-      return false;
-    }
-
-    if ($this->simBrute() < $this->rules['brute']) {
-      $this->errors[] = sprintf($this->i18n['brute'], $this->rules['brute'], $days);
-      return false;
-    }
-
-    if (!$this->noTokens()) {
-      return false;
-    }
-
-    if ($this->hasMatch()) {
-      return false;
-    }
-
+    # Default to true
     return true;
   }
 
   /**
    * @return array The $errors array (defaults to empty array)
    */
-  public function showErrors() {
+  public function getErrors() {
     return $this->errors;
   }
 
@@ -273,7 +259,7 @@ class Brutus {
     return true;
   }
 
-  public function convert1337() {
+  protected function convert1337() {
     $leet = array(
       '@'=>array('a'), '4'=>array('a'), '7' => array('t'),
       '8'=>array('b'), '3'=>array('e'), '6'=>array('b'),
@@ -295,7 +281,7 @@ class Brutus {
     $this->passlist = $this->leetVariations($map);
   }
 
-  public function leetVariations(&$map, $old = array(), $index = 0) {
+  protected function leetVariations(&$map, $old = array(), $index = 0) {
     $new = array();
     foreach ($map[$index] as $char) {
       $c = count($old);
@@ -313,7 +299,7 @@ class Brutus {
     return $r;
   }
 
-  public function hasMatch() {
+  protected function hasMatch() {
     if ($this->rules['lookup']) {
       if (empty($this->passlist)) {
         $this->convert1337();
@@ -331,7 +317,6 @@ class Brutus {
           $this->errors[] = $this->i18n['commons'];
           return true;
         }
-
       }
       else {
         try {
@@ -396,7 +381,7 @@ class Brutus {
    * modified version of it (depending on the value of $this->rules['diminishing'])
    * to calculate the estimated entropy of the password string.
    */
-  protected function getNISTbits() {
+  public function getNISTbits() {
 
     $bits = $cnt = 0;
     $char_map = str_split($this->password);
@@ -476,7 +461,7 @@ class Brutus {
     # 6 bits can be granted if the password contains
     # a combination of mixed case, numbers, and symbols.
     # We assign each of these a value of 1.5 bits here.
-    if (preg_match_all('/[A-Z]/', $this->password, $upper) >= $this->rules['upper'])  $bits += 1.5;
+    if (preg_match_all('/[A-Z]/', $this->password, $upper) >= $this->rules['upper']) $bits += 1.5;
     if (preg_match_all('/[a-z]/', $this->password, $lower) >= $this->rules['lower'])  $bits += 1.5;
     if (preg_match_all('/[0-9]/', $this->password, $numbs) >= $this->rules['number'])  $bits += 1.5;
     if (preg_match_all('/[\W_]/', $this->password, $specs) >= $this->rules['special'])  $bits += 1.5;
@@ -484,6 +469,15 @@ class Brutus {
     # Return result and exit
     return $bits;
   }
+
+  protected function correctBits() {
+    if ($this->getNISTbits() < $this->rules['entropy']) {
+      $this->errors[] = sprintf($this->i18n['entropy'], $this->rules['entropy'], $this->getNISTbits());
+      return false;
+    }
+    return true;
+  }
+
 
   /**
    * The following method was taken directly from the Mellt class by ravisorg (https://github.com/ravisorg/Mellt)
@@ -515,7 +509,7 @@ class Brutus {
    * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
    * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
    */
-  protected function simBrute() {
+  public function simBrute() {
     $base = ''; $baseKey = NULL;
     for ($t = 0; $t < $this->passlen; $t++) {
       $char = $this->password[$t];
@@ -610,5 +604,13 @@ class Brutus {
 
     # Return result and exit
     return $days;
+  }
+
+  protected function correctDays() {
+    if ($this->simBrute() < $this->rules['brute']) {
+      $this->errors[] = sprintf($this->i18n['brute'], $this->rules['brute'], $this->simBrute());
+      return false;
+    }
+    return true;
   }
 }
