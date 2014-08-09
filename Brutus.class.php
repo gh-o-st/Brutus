@@ -82,10 +82,15 @@ class Brutus {
   protected $errors = array();
 
   /**
-   * @var array $i18n A list of English strings to be matched to each $errors type
-   * Custom strings for other languages can be passed in the __construct() method
+   * @var bool $breakout Efficiency tweak that governs whether or not to break out of a 
+   * function upon encountering the first error during processing. (modified in testsPassed() method)
    */
-  private $i18n = array(
+  protected $breakout = true;
+
+  /**
+   * @var array $msgs A list of strings to be matched to each $errors type
+   */
+  private $msgs = array(
     'brute' => 'Password must survive %s days of brute force attempts; Currently at %s',
     'upper' => 'Password must contain at least %s uppercase letter%s',
     'lower' => 'Password must contain at least %s lowercase leter%s',
@@ -126,8 +131,8 @@ class Brutus {
 
   /**
    * @param array $args The list of optional arguments which will be assigned to the $rules array
-   * @param mixed $i18n Set to NULL by default. If not null, should contain array to replace original strings
-   * @throws Exception If $i18n array does not contain the correct number of entries
+   * @param mixed $msgs Set to NULL by default. If not null, should contain array to replace original strings
+   * @throws Exception If $msgs array does not contain the correct number of entries
    */
   public function __construct($args=array()) {
 
@@ -171,6 +176,11 @@ class Brutus {
       }
     }
 
+    # Don't be a f***ing idiot... This should never happen.
+    if ($this->rules['minlen'] > $this->rules['maxlen']) {
+      throw new Exception("Min/Max Impossibility... World will self-destruct in 10 seconds.");
+    }
+
     # The only way this exception will be thrown is if you fail to use the
     # exact same key names in the custom configuration you pass to the __construct(),
     # thus causing comparison to fail and additional keys to be added
@@ -192,23 +202,38 @@ class Brutus {
    * @param mixed $id Should be an array (if set) of user-specific personally identifiable tokens
    * @return bool Assumes TRUE (meaning NOT a bad password), $errors causes FALSE return
    */
-  public function testsPassed($password, $id=null) {
+  public function testsPassed($password, $id=null, $break_on_error=true) {
 
     # Setup additional vars for later
     $this->password = $password;
     $this->rules['identity'] = $id;
     $this->passlen = strlen($this->password);
+    $this->breakout = $break_on_error;
 
-    # Run all tests, but break out on first error
-    if (!$this->correctLength())  return false;
-    if (!$this->correctComp())   return false;
-    if (!$this->correctBits())  return false;
-    if (!$this->correctDays()) return false;
-    if (!$this->noTokens())   return false;
-    if ($this->hasMatch())   return false;
+    # Run all tests, but break on first error
+    if ($break_on_error) {
+      if (!$this->correctLength())  return false;
+      if (!$this->correctComp())   return false;
+      if (!$this->correctBits())  return false;
+      if (!$this->correctDays()) return false;
+      if (!$this->noTokens())   return false;
+      if ($this->hasMatch())   return false;
+      return true;
+    }
 
-    # Default to true
-    return true;
+    # Run all tests and build $errors array
+    else {
+      $this->correctLength();
+      $this->correctComp();
+      $this->correctBits();
+      $this->correctDays();
+      $this->noTokens();
+      $this->hasMatch();
+      if (!empty($this->errors)) {
+        return false;
+      }
+      return true;
+    }
   }
 
   /**
@@ -222,16 +247,16 @@ class Brutus {
    * Checks the length of the password and compares it against the corresponding $rules
    */
   protected function correctLength() {
+    if ($this->rules['minlen'] < 10) {
+      throw new Exception("Smaug just ate your baby... Don't say I didn't warn you.");
+    }
     if ($this->passlen < $this->rules['minlen']) {
-      $this->errors[] = sprintf($this->i18n['minlen'], $this->rules['minlen']);
+      $this->errors[] = sprintf($this->msgs['minlen'], $this->rules['minlen']);
       return false;
     }
     else if ($this->passlen > $this->rules['maxlen']) {
-      $this->errors[] = sprintf($this->i18n['maxlen'], $this->rules['maxlen']);
+      $this->errors[] = sprintf($this->msgs['maxlen'], $this->rules['maxlen']);
       return false;
-    }
-    if ($this->rules['minlen'] < 10) {
-      throw new Exception("Smaug just ate your baby... Don't say I didn't warn you.");
     }
     return true;
   }
@@ -239,22 +264,30 @@ class Brutus {
   /**
    * Checks the composition of the password and compares it against the corresponding $rules[]
    */
-  protected function correctComp() {
+  protected function correctComp($breakout=true) {
     if (preg_match_all('/[a-z]/', $this->password, $lower) < $this->rules['lower']) {
-      $this->errors[] = sprintf($this->i18n['lower'], $this->rules['lower'], ($this->rules['lower'] > 1) ? 's' : '');
-      return false;
+      $this->errors[] = sprintf($this->msgs['lower'], $this->rules['lower'], ($this->rules['lower'] > 1) ? 's' : '');
+      if ($breakout) {
+        return false;
+      }
     }
     if (preg_match_all('/[A-Z]/', $this->password, $upper) < $this->rules['upper']) {
-      $this->errors[] = sprintf($this->i18n['upper'], $this->rules['upper'], ($this->rules['upper'] > 1) ? 's' : '');
-      return false;
+      $this->errors[] = sprintf($this->msgs['upper'], $this->rules['upper'], ($this->rules['upper'] > 1) ? 's' : '');
+      if ($breakout) {
+        return false;
+      }
     }
     if (preg_match_all('/[0-9]/', $this->password, $numbers) < $this->rules['number']) {
-      $this->errors[] = sprintf($this->i18n['number'], $this->rules['number'], ($this->rules['number'] > 1) ? 's' : '');
-      return false;
+      $this->errors[] = sprintf($this->msgs['number'], $this->rules['number'], ($this->rules['number'] > 1) ? 's' : '');
+      if ($breakout) {
+        return false;
+      }
     }
     if (preg_match_all('/[\W_]/', $this->password, $special) < $this->rules['special']) {
-      $this->errors[] = sprintf($this->i18n['special'], $this->rules['special'], ($this->rules['special'] > 1) ? 's' : '');
-      return false;
+      $this->errors[] = sprintf($this->msgs['special'], $this->rules['special'], ($this->rules['special'] > 1) ? 's' : '');
+      if ($breakout) {
+        return false;
+      }
     }
     return true;
   }
@@ -313,8 +346,8 @@ class Brutus {
         }
         $commons = file($this->commons);
         $matched = array_intersect($commons, $this->passlist);
-        if (count($matched) > 0) {
-          $this->errors[] = $this->i18n['commons'];
+        if (!empty($matched)) {
+          $this->errors[] = $this->msgs['commons'];
           return true;
         }
       }
@@ -328,7 +361,7 @@ class Brutus {
             $stmt->bindParam(':pass', $password);
             $stmt->execute();
             if ($stmt->fetchColumn() > 0) {
-              $this->errors[] = $this->i18n['commons'];
+              $this->errors[] = $this->msgs['commons'];
               return true;
             }
           }
@@ -365,7 +398,7 @@ class Brutus {
           foreach ($this->rules['identity'] as $token) {
             foreach ($this->passlist as $password) {
               if (preg_match("/$token/i", $password)) {
-                $this->errors[] = $this->i18n['identity'];
+                $this->errors[] = $this->msgs['identity'];
                 return false;
               }
             }
@@ -472,7 +505,7 @@ class Brutus {
 
   protected function correctBits() {
     if ($this->getNISTbits() < $this->rules['entropy']) {
-      $this->errors[] = sprintf($this->i18n['entropy'], $this->rules['entropy'], $this->getNISTbits());
+      $this->errors[] = sprintf($this->msgs['entropy'], $this->rules['entropy'], $this->getNISTbits());
       return false;
     }
     return true;
@@ -608,7 +641,7 @@ class Brutus {
 
   protected function correctDays() {
     if ($this->simBrute() < $this->rules['brute']) {
-      $this->errors[] = sprintf($this->i18n['brute'], $this->rules['brute'], $this->simBrute());
+      $this->errors[] = sprintf($this->msgs['brute'], $this->rules['brute'], $this->simBrute());
       return false;
     }
     return true;
