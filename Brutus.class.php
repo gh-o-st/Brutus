@@ -90,7 +90,7 @@ class Brutus {
   /**
    * @var array $msgs A list of strings to be matched to each $errors type
    */
-  private $msgs = array(
+  protected $msgs = array(
     'brute' => 'Password must survive %s days of brute force attempts; Currently at %s',
     'upper' => 'Password must contain at least %s uppercase letter%s',
     'lower' => 'Password must contain at least %s lowercase leter%s',
@@ -110,7 +110,7 @@ class Brutus {
    * the complexity of the character set gradually so as to err in the attacker's favor by reducing
    * the estimated keyspace needed to crack a particular password using brute force.
    */
-  private $charSets = array(
+  protected $charSets = array(
     "0123456789", #numeric
     "0123456789 ", #numeric + space
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ", #UPPERCASE
@@ -208,10 +208,13 @@ class Brutus {
     $this->password = $password;
     $this->rules['identity'] = $id;
     $this->passlen = strlen($this->password);
-    $this->breakout = $break_on_error;
+
+    # In case you set this to NULL or something other than boolean
+    # we revert back to TRUE so as to prevent errors later...
+    $this->breakout = (!isset($break_on_error) || !is_bool($break_on_error)) ? true : $break_on_error;
 
     # Run all tests, but break on first error
-    if ($break_on_error) {
+    if ($this->breakout) {
       if (!$this->correctLength())  return false;
       if (!$this->correctComp())   return false;
       if (!$this->correctBits())  return false;
@@ -264,34 +267,42 @@ class Brutus {
   /**
    * Checks the composition of the password and compares it against the corresponding $rules[]
    */
-  protected function correctComp($breakout=true) {
+  protected function correctComp() {
     if (preg_match_all('/[a-z]/', $this->password, $lower) < $this->rules['lower']) {
       $this->errors[] = sprintf($this->msgs['lower'], $this->rules['lower'], ($this->rules['lower'] > 1) ? 's' : '');
-      if ($breakout) {
+      if ($this->breakout) {
         return false;
       }
     }
     if (preg_match_all('/[A-Z]/', $this->password, $upper) < $this->rules['upper']) {
       $this->errors[] = sprintf($this->msgs['upper'], $this->rules['upper'], ($this->rules['upper'] > 1) ? 's' : '');
-      if ($breakout) {
+      if ($this->breakout) {
         return false;
       }
     }
     if (preg_match_all('/[0-9]/', $this->password, $numbers) < $this->rules['number']) {
       $this->errors[] = sprintf($this->msgs['number'], $this->rules['number'], ($this->rules['number'] > 1) ? 's' : '');
-      if ($breakout) {
+      if ($this->breakout) {
         return false;
       }
     }
     if (preg_match_all('/[\W_]/', $this->password, $special) < $this->rules['special']) {
       $this->errors[] = sprintf($this->msgs['special'], $this->rules['special'], ($this->rules['special'] > 1) ? 's' : '');
-      if ($breakout) {
+      if ($this->breakout) {
         return false;
       }
+    }
+    $comperrors = array('lower', 'upper', 'number', 'special');
+    if (!empty(array_intersect_key($comperrors, $this->errors))) {
+      return false;
     }
     return true;
   }
 
+  /**
+   * This is a helper method which does half the processing for leet into english
+   * Method is useless without its counterpart leetVariations() method
+   */
   protected function convert1337() {
     $leet = array(
       '@'=>array('a'), '4'=>array('a'), '7' => array('t'),
@@ -314,6 +325,10 @@ class Brutus {
     $this->passlist = $this->leetVariations($map);
   }
 
+  /**
+   * This is another helper method for populating an array of permuted passwords
+   * where each possible substitution has been replaced with its plain text counterpart
+   */
   protected function leetVariations(&$map, $old = array(), $index = 0) {
     $new = array();
     foreach ($map[$index] as $char) {
@@ -332,6 +347,9 @@ class Brutus {
     return $r;
   }
 
+  /**
+   * Method to check a file or database for the password(s) in question.
+   */
   protected function hasMatch() {
     if ($this->rules['lookup']) {
       if (empty($this->passlist)) {
@@ -503,6 +521,12 @@ class Brutus {
     return $bits;
   }
 
+  /**
+   * Small helper function to actually make the comparison between the result of getNISTbits()
+   * and $this->rules['entropy'] in order to allow the previous method to be used independently
+   *
+   * @return bool Method defaults to TRUE, errors set FALSE return
+   */
   protected function correctBits() {
     if ($this->getNISTbits() < $this->rules['entropy']) {
       $this->errors[] = sprintf($this->msgs['entropy'], $this->rules['entropy'], $this->getNISTbits());
@@ -639,6 +663,12 @@ class Brutus {
     return $days;
   }
 
+  /**
+   * Small helper function to actually make the comparison between the result of simBrute()
+   * and $this->rules['brute'] in order to allow the previous method to be used independently
+   *
+   * @return bool Method defaults to TRUE, errors set FALSE return
+   */
   protected function correctDays() {
     if ($this->simBrute() < $this->rules['brute']) {
       $this->errors[] = sprintf($this->msgs['brute'], $this->rules['brute'], $this->simBrute());

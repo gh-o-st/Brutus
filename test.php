@@ -5,7 +5,7 @@ require_once('config.php');
 require_once('Brutus.class.php');
 
 if (!isset($_POST['password'])) {
-  $password = 'J0$hUa_1982_J0N3$_!$_@w3$0M3';
+  $password = 'ChR!$t0Ph3R_1492';
 }
 else {
   $password = htmlspecialchars($_POST['password']);
