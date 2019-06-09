@@ -8,7 +8,7 @@
 * as well as enforcing a security policy condusive to strong passwords.
 *
 * Includes a dictionary of the 10k most common passwords from Mike Burnett
-* (https:#xato.net/passwords/more-top-worst-passwords) as well as an extensive
+* (https:xato.net/passwords/more-top-worst-passwords) as well as an extensive
 * alphabetical dictionary of common terms. Checking passwords against a library
 * like this helps to prevent users from choosing passwords that wouldn't stand
 * up to even the simplest dictionary attacks. We also check the password for
