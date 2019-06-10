@@ -45,12 +45,52 @@ if($brutus->badPass($password, $id)) {
 }
 ```
 
+Advanced Usage
+-----
+One feature I think is often overlooked when grading a password is that of identification tokens. At the very least, most authentication methods require either a username or an email address and a password. So why not use that second piece of information in the grading of the password's strength? This can be further improved upon if the user is registering for a site or service using a signup form which allows them to fill out multiple pieces of personal information (such as first name, last name, DOB, age, sex, etc). 
+
+To be clear, none of this information is stored by the class or any piece of its functionality, but could be passed to it as an array to use when verifying the password the user decides to use when creating their account. I think it's a missed opportunity, as someone bent on gaining access to a particular account wouldn't have picked that account by random chance. They will have done some research on the individual who owns it and may likely have similar information to aid in their attack.
+
+```php
+/**
+ * So let's pretend Christopher Columbus signed up for our service
+ * using a form which we're able to grab the values from to pass
+ * to the Brutus class while he registers his username and password
+ */
+$id = array(
+  'christopher',
+  'columbus',
+  '1451'
+);
+
+// And here is the password he chose
+$password = 'ChR!$_1451';
+
+try {
+  $brutus = new Brutus($args);
+  if (!$brutus->testsPassed($password, $id, false) && !empty($brutus->getErrors())) {
+    echo '<p>';
+    foreach($brutus->getErrors() as $error) {
+      echo $error.'<br>';
+    }
+    echo '</p>';
+  }
+  else {
+    echo '<p>You have a strong password!</p>';
+  }
+}
+catch (Exception $e) {
+  echo '<p>Caught Exception: '.$e->getMessage().'</p>';
+}
+```
+
+With the combination of identification tokens and the ability to convert *1337* into plain english, poor Christopher's password would be rejected as too weak. Sorry bro... Try again.
+
+
 Todo
 -----
-- [x] modularize the functionality more efficiently
-- [x] original NIST entropy calculation + modified version
-- [x] id tokens passed directly to method rather than constructor
-- [x] 2 methods for dictionary lookup; file or database
-- [x] PHPDoc commenting throughout
-- [x] Modify `__construct()` to allow a partial array to be passed
-- [ ] MOAR PERFORMANCE TWEAKING!!!
+- [ ] Performance Tweaks and Optimization
+- [ ] Update common passwords list
+- [ ] Include (optional) more extensive password list
+- [ ] Convert to WP plugin?
+- [ ] Modularize functionality into multiple classes?
