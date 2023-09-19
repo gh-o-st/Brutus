@@ -164,19 +164,44 @@ class BrutusConfig {
         ];
     }
 
+    public function getLengthRule(): int {
+        return $this->rules['length'];
+    }
+
+    public function getLowercaseRule(): array {
+        return $this->rules['lowercase'];
+    }
+
+    public function getUppercaseRule(): array {
+        return $this->rules['uppercase'];
+    }
+
+    public function getNumbersRule(): array {
+        return $this->rules['numbers'];
+    }
+
+    public function getSymbolsRule(): array {
+        return $this->rules['symbols'];
+    }
+
+    public function getEntropyRule(): array {
+        return $this->rules['entropy'];
+    }
+
+    public function getBruteForceRule(): array {
+        return $this->rules['bruteForce'];
+    }
+
     public function getLeetMap(): array {
         return [
             'a' => [ '4', '@' ],
             'b' => [ '8' ],
-            'c' => [ '(', '{', '[', '<' ],
+            'c' => [ '(', '[', '<' ],
             'd' => [ '6' ],
             'e' => [ '3' ],
-            'f' => [ '#' ],
             'g' => [ '9' ],
-            'h' => [ '#' ],
+            'h' => [ '#', '4', '|-|' ],
             'i' => [ '1', '!', '|' ],
-            'j' => [ '7' ],
-            'k' => [ 'X' ],
             'l' => [ '1', '!', '|' ],
             'o' => [ '0' ],
             's' => [ '5', '$' ],
